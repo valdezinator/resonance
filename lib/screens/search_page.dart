@@ -93,7 +93,8 @@ class _SearchPageState extends State<SearchPage> {
     });
 
     try {
-      final results = await _musicService.searchSongs(query, filter: _selectedFilter);
+      final results =
+          await _musicService.searchSongs(query, filter: _selectedFilter);
       setState(() {
         _searchResults = results;
         _isLoading = false;
@@ -158,7 +159,12 @@ class _SearchPageState extends State<SearchPage> {
                             if (audioUrl == null || audioUrl.isEmpty) {
                               throw Exception('Song URL is missing');
                             }
-                            await _musicService.playSong(audioUrl);
+                            final nextSongIndex = index + 1;
+                            String? nextUrl;
+                            if (nextSongIndex < _searchResults.length) {
+                              nextUrl = _searchResults[nextSongIndex]['mp3_url'] as String?;
+                            }
+                            await _musicService.playSong(audioUrl, nextSongUrl: nextUrl);
                           } catch (e) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(

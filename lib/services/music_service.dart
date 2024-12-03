@@ -4,6 +4,26 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class MusicService {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final _supabase = Supabase.instance.client;
+  late ConcatenatingAudioSource _playlist;
+
+  MusicService() {
+    _playlist = ConcatenatingAudioSource(children: []);
+    _initAudioPlayer();
+  }
+
+  Future<void> _initAudioPlayer() async {
+    // Configure for gapless playback
+    await _audioPlayer.setAudioSource(
+      _playlist,
+      preload: true,
+      initialPosition: Duration.zero,
+      initialIndex: 0,
+    );
+
+    // Enable gapless playback
+    await _audioPlayer.setLoopMode(LoopMode.off);
+    await _audioPlayer.setShuffleModeEnabled(false);
+  }
 
   Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
   Stream<Duration> get positionStream => _audioPlayer.positionStream;
@@ -36,7 +56,7 @@ class MusicService {
       final response = await _supabase
           .from('albums')
           .select()
-          .eq('category', 'hits')  // Filter for "hits" category
+          .eq('category', 'hits') // Filter for "hits" category
           .order('created_at');
 
       if (response == null) {
@@ -68,9 +88,26 @@ class MusicService {
     }
   }
 
-  Future<void> playSong(String url) async {
-    await _audioPlayer.setUrl(url);
-    await _audioPlayer.play();
+  Future<void> playSong(String url, {String? nextSongUrl}) async {
+    try {
+      await _playlist.clear();
+
+      final sources = [
+        AudioSource.uri(Uri.parse(url), tag: {'url': url}),
+      ];
+
+      if (nextSongUrl != null) {
+        sources.add(
+            AudioSource.uri(Uri.parse(nextSongUrl), tag: {'url': nextSongUrl}));
+      }
+
+      await _playlist.addAll(sources);
+      await _audioPlayer.seek(Duration.zero, index: 0);
+      await _audioPlayer.play();
+    } catch (e) {
+      print('Error playing song: $e');
+      rethrow;
+    }
   }
 
   Future<void> pause() async {
@@ -89,10 +126,11 @@ class MusicService {
     _audioPlayer.dispose();
   }
 
-  Future<List<Map<String, dynamic>>> searchSongs(String query, {String filter = 'all'}) async {
+  Future<List<Map<String, dynamic>>> searchSongs(String query,
+      {String filter = 'all'}) async {
     try {
       var request = _supabase.from('songs').select();
-      
+
       switch (filter) {
         case 'songs':
           request = request.or('title.ilike.%$query%');
@@ -104,7 +142,8 @@ class MusicService {
           request = request.or('album.ilike.%$query%');
           break;
         default:
-          request = request.or('title.ilike.%$query%,artist.ilike.%$query%,album.ilike.%$query%');
+          request = request.or(
+              'title.ilike.%$query%,artist.ilike.%$query%,album.ilike.%$query%');
       }
 
       final response = await request;
@@ -130,7 +169,7 @@ class MusicService {
 
   Future<void> playAllSongs(List<Map<String, dynamic>> songs) async {
     if (songs.isEmpty) return;
-    
+
     try {
       // Play the first song
       final firstSong = songs[0];
@@ -151,7 +190,7 @@ class MusicService {
           .select('*, songs(*)')
           .order('played_at', ascending: false)
           .limit(10);
-      
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('Error fetching recently played: $e');
@@ -166,7 +205,7 @@ class MusicService {
           .select()
           .eq('type', 'personalized')
           .limit(5);
-      
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('Error fetching personalized playlists: $e');
@@ -180,7 +219,7 @@ class MusicService {
           .from('top_charts')
           .select('*, songs(*)')
           .limit(10);
-      
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('Error fetching top charts: $e');

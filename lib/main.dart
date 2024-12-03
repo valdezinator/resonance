@@ -107,17 +107,17 @@ class _HomePageState extends State<HomePage> {
       body: SafeArea(
         child: Container(
           decoration: BoxDecoration(
-            // color: const Color(0xFF0C0F14),
-            gradient: RadialGradient(
-              center: Alignment(0, -0.5),
-              radius: 2.0,
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
               colors: [
-                const Color.fromARGB(255, 110, 31, 31).withOpacity(0.5),
-                const Color.fromARGB(255, 148, 117, 49).withOpacity(0.75),
-                const Color.fromARGB(255, 61, 94, 90).withOpacity(0.3),
-                const Color.fromARGB(255, 99, 109, 126),
+                const Color(0xFF500B0B), // Dark red at top
+                const Color.fromARGB(
+                    255, 143, 70, 22), // Darker red-black in middle
+                const Color.fromARGB(26, 175, 110, 117),
+                const Color(0xFF0C0F14), // Pure black at bottom
               ],
-              stops: const [0.0, 0.3, 0.6, 1.0],
+              stops: const [0.0, 0.35, 0.70, 0.7],
             ),
           ),
           child: _selectedIndex == 1
