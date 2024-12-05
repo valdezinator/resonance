@@ -32,6 +32,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Music App',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
         // scaffoldBackgroundColor: Colors.black,
@@ -687,7 +688,18 @@ class _HomePageState extends State<HomePage> {
               setState(() {
                 currentSong = song;
               });
-              await _musicService.playSong(audioUrl);
+
+              // Get next song from _songs array
+              final nextSongIndex = index + 1;
+              final nextSong = nextSongIndex < _songs.length 
+                  ? _songs[nextSongIndex] 
+                  : null;
+              
+              await _musicService.playSong(
+                audioUrl,
+                currentSong: song,
+                nextSong: nextSong,
+              );
             } catch (e) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

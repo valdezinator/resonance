@@ -152,13 +152,14 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                                       width: 48,
                                       height: 48,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) =>
-                                          Container(
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              Container(
                                         width: 48,
                                         height: 48,
                                         color: Colors.grey[800],
-                                        child:
-                                            Icon(Icons.music_note, color: Colors.white),
+                                        child: Icon(Icons.music_note,
+                                            color: Colors.white),
                                       ),
                                     ),
                                   ),
@@ -172,18 +173,31 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                                   ),
                                   onTap: () async {
                                     try {
-                                      final audioUrl = song['mp3_url'] as String?;
-                                      if (audioUrl == null || audioUrl.isEmpty) {
+                                      final audioUrl =
+                                          song['mp3_url'] as String?;
+                                      if (audioUrl == null ||
+                                          audioUrl.isEmpty) {
                                         throw Exception('Song URL is missing');
                                       }
+                                      
+                                      // Call onSongPlay before playing to update UI
+                                      widget.onSongPlay(song);
+                                      
+                                      // Get next song from search results
                                       final nextSongIndex = index + 1;
-                                      String? nextUrl;
-                                      if (nextSongIndex < _searchResults.length) {
-                                        nextUrl = _searchResults[nextSongIndex]['mp3_url'] as String?;
-                                      }
-                                      await widget.musicService.playSong(audioUrl, nextSongUrl: nextUrl);
+                                      final nextSong = nextSongIndex <
+                                                  _searchResults.length
+                                              ? _searchResults[nextSongIndex]
+                                              : null;
+                                              
+                                      await widget.musicService.playSong(
+                                        audioUrl,
+                                        currentSong: song,
+                                        nextSong: nextSong,
+                                      );
                                     } catch (e) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
                                         SnackBar(
                                           content: Text(
                                               'Failed to play song: ${e.toString()}'),
@@ -213,12 +227,13 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                             padding: const EdgeInsets.all(12),
                             child: SvgPicture.asset(
                               'assets/icons/search_icon.svg',
-                              colorFilter: ColorFilter.mode(Colors.grey, BlendMode.srcIn),
+                              colorFilter: ColorFilter.mode(
+                                  Colors.grey, BlendMode.srcIn),
                             ),
                           ),
                           border: InputBorder.none,
-                          contentPadding:
-                              EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
                         ),
                         onChanged: _performSearch,
                       ),

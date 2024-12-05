@@ -2,6 +2,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'local_storage_service.dart';
 import 'package:http/http.dart' as http;
+import 'dart:async';
 
 class MusicService {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -10,6 +11,10 @@ class MusicService {
   LoopMode _loopMode = LoopMode.off;
   bool _shuffleEnabled = false;
   final _localStorageService = LocalStorageService();
+  final _queueController =
+      StreamController<List<Map<String, dynamic>>>.broadcast();
+  final _currentSongController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   MusicService() {
     _playlist = ConcatenatingAudioSource(children: []);
@@ -17,17 +22,31 @@ class MusicService {
   }
 
   Future<void> _initAudioPlayer() async {
-    // Configure for gapless playback
-    await _audioPlayer.setAudioSource(
-      _playlist,
-      preload: true,
-      initialPosition: Duration.zero,
-      initialIndex: 0,
-    );
+    await _audioPlayer.setPreferredPeakBitRate(320000);
 
-    // Enable gapless playback
-    await _audioPlayer.setLoopMode(LoopMode.off);
-    await _audioPlayer.setShuffleModeEnabled(false);
+    // Configures auto-advance behavior
+    _audioPlayer.setAutomaticallyWaitsToMinimizeStalling(true);
+
+    // Listens for song completion to play next
+    _audioPlayer.playerStateStream.listen((state) async {
+      if (state.processingState == ProcessingState.completed) {
+        try {
+          // Get the next song's metadata before playing
+          final nextSong = _playlist.sequence.length > 1
+              ? _playlist.sequence[1].tag as Map<String, dynamic>
+              : null;
+
+          await playNext();
+
+          // Notify UI of song change
+          if (nextSong != null) {
+            _currentSongController.add(nextSong);
+          }
+        } catch (e) {
+          print('Error during auto-play: $e');
+        }
+      }
+    });
   }
 
   Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
@@ -94,25 +113,80 @@ class MusicService {
     }
   }
 
-  Future<void> playSong(String url, {String? nextSongUrl}) async {
+  Future<void> playSong(String url,
+      {Map<String, dynamic>? currentSong,
+      Map<String, dynamic>? nextSong}) async {
     try {
-      await _playlist.clear();
+      // Create playlist with current song
+      final playlist = ConcatenatingAudioSource(children: [
+        AudioSource.uri(
+          Uri.parse(currentSong?['mp3_url'] ?? url),
+          tag: currentSong ?? {'url': url},
+        ),
+      ]);
 
-      final sources = [
-        AudioSource.uri(Uri.parse(url), tag: {'url': url}),
-      ];
+      // If no next song provided, fetch the next song from database
+      if (nextSong == null && currentSong != null) {
+        final response = await _supabase
+            .from('songs')
+            .select()
+            .gt('id',
+                currentSong['id']) // Get songs with ID greater than current
+            .order('id') // Order by ID
+            .limit(1) // Get just the next song
+            .single(); // Get as single record
 
-      if (nextSongUrl != null) {
-        sources.add(
-            AudioSource.uri(Uri.parse(nextSongUrl), tag: {'url': nextSongUrl}));
+        if (response != null) {
+          nextSong = response;
+        }
       }
 
-      await _playlist.addAll(sources);
-      await _audioPlayer.seek(Duration.zero, index: 0);
+      // Add next song if available
+      if (nextSong != null && nextSong['mp3_url'] != null) {
+        playlist.add(
+          AudioSource.uri(
+            Uri.parse(nextSong['mp3_url']),
+            tag: nextSong,
+          ),
+        );
+      }
+
+      await _audioPlayer.setAudioSource(
+        playlist,
+        preload: true,
+        initialPosition: Duration.zero,
+        initialIndex: 0,
+      );
+
+      _playlist = playlist;
       await _audioPlayer.play();
+      _updateQueueStream();
     } catch (e) {
       print('Error playing song: $e');
       rethrow;
+    }
+  }
+
+  void _updateQueueStream() {
+    try {
+      final currentQueue = _playlist.sequence
+          .map((source) => {
+                'id': source.tag['url'] ?? '',
+                'title': source.tag['title'] ?? 'Unknown Title',
+                'artist': source.tag['artist'] ?? 'Unknown Artist',
+                'image_url': source.tag['image_url'] ?? '',
+                'mp3_url': source.tag['url'] ?? '',
+              })
+          .toList();
+
+      // Skip the currently playing song
+      if (currentQueue.isNotEmpty) {
+        currentQueue.removeAt(0);
+      }
+
+      _queueController.add(currentQueue);
+    } catch (e) {
+      print('Error updating queue stream: $e');
     }
   }
 
@@ -130,6 +204,7 @@ class MusicService {
 
   void dispose() {
     _audioPlayer.dispose();
+    _currentSongController.close();
   }
 
   Future<List<Map<String, dynamic>>> searchSongs(String query,
@@ -139,13 +214,13 @@ class MusicService {
 
       switch (filter) {
         case 'songs':
-          request = request.or('title.ilike.%$query%');
+          request = request.ilike('title', '%$query%');
           break;
         case 'artists':
-          request = request.or('artist.ilike.%$query%');
+          request = request.ilike('artist', '%$query%');
           break;
         case 'albums':
-          request = request.or('album.ilike.%$query%');
+          request = request.ilike('album', '%$query%');
           break;
         default:
           request = request.or(
@@ -153,7 +228,7 @@ class MusicService {
       }
 
       final response = await request;
-      return List<Map<String, dynamic>>.from(response as List);
+      return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       throw Exception('Failed to search songs: $e');
     }
@@ -179,7 +254,7 @@ class MusicService {
     try {
       // Play the first song
       final firstSong = songs[0];
-      final audioUrl = firstSong['audio_url'] as String?;
+      final audioUrl = firstSong['mp3_url'] as String?;
       if (audioUrl == null || audioUrl.isEmpty) {
         throw Exception('Song URL is missing');
       }
@@ -263,16 +338,50 @@ class MusicService {
     });
   }
 
-  final List<Map<String, dynamic>> _queue = [];
+  Future<void> addToQueue(Map<String, dynamic> song) async {
+    try {
+      await _playlist.add(
+        AudioSource.uri(
+          Uri.parse(song['mp3_url']),
+          tag: {
+            'url': song['mp3_url'],
+            'title': song['title'],
+            'artist': song['artist'],
+            'image_url': song['image_url'],
+          },
+        ),
+      );
+      _updateQueueStream();
+    } catch (e) {
+      print('Error adding to queue: $e');
+      rethrow;
+    }
+  }
 
-  void addToQueue(Map<String, dynamic> song) {
-    _queue.add(song);
+  Future<void> clearQueue() async {
+    try {
+      // Keep the current song
+      if (_playlist.length > 1) {
+        final currentSource = _playlist.sequence.first;
+        await _playlist.clear();
+        await _playlist.add(currentSource);
+        _updateQueueStream();
+      }
+    } catch (e) {
+      print('Error clearing queue: $e');
+      rethrow;
+    }
   }
 
   Future<void> playNext() async {
-    if (_queue.isNotEmpty) {
-      final nextSong = _queue.removeAt(0);
-      await playSong(nextSong['mp3_url']);
+    try {
+      if (_audioPlayer.hasNext) {
+        await _audioPlayer.seekToNext();
+        await _audioPlayer.play();
+      }
+    } catch (e) {
+      print('Error playing next song: $e');
+      rethrow;
     }
   }
 
@@ -369,4 +478,28 @@ class MusicService {
     }
     throw Exception('Failed to download file');
   }
+
+  Stream<List<Map<String, dynamic>>> get queueStream => _queueController.stream;
+
+  Future<void> reorderQueue(int oldIndex, int newIndex) async {
+    try {
+      // Adjust indices to account for the currently playing song
+      oldIndex += 1;
+      newIndex += 1;
+
+      final playlist = _playlist.sequence.toList();
+      final item = playlist.removeAt(oldIndex);
+      playlist.insert(newIndex, item);
+
+      await _playlist.clear();
+      await _playlist.addAll(playlist);
+      _updateQueueStream();
+    } catch (e) {
+      print('Error reordering queue: $e');
+      rethrow;
+    }
+  }
+
+  Stream<Map<String, dynamic>> get currentSongStream =>
+      _currentSongController.stream;
 }

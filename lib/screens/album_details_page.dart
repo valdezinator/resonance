@@ -263,102 +263,16 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                             ),
                           ),
                         ),
-                        SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final song = songs[index];
-                              return Container(
-                                margin: EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: ListTile(
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 24, vertical: 8),
-                                  leading: SizedBox(
-                                    width: 24,
-                                    child: Text(
-                                      '${index + 1}',
-                                      style: TextStyle(
-                                        color: Colors.grey[400],
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ),
-                                  title: Padding(
-                                    padding: EdgeInsets.only(left: 8),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          song['title'],
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 1,
-                                        ),
-                                        Text(
-                                          song['artist'],
-                                          style: TextStyle(
-                                            color: Colors.grey[400],
-                                            fontSize: 14,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 1,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  subtitle: null,
-                                  trailing: Text(
-                                    song['duration'] ?? '0:00',
-                                    style: TextStyle(
-                                      color: Colors.grey[400],
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  onTap: () async {
-                                    try {
-                                      final audioUrl = song['audio_url'];
-                                      if (audioUrl == null || audioUrl.isEmpty) {
-                                        throw Exception('Song URL is missing');
-                                      }
-
-                                      final songData = {
-                                        ...song,
-                                        'id': song['id'],
-                                        'image_url': widget.album['image_url'],
-                                        'title': song['title'] ?? 'Unknown Title',
-                                        'artist': song['artist'] ?? 'Unknown Artist',
-                                        'audio_url': audioUrl,
-                                      };
-
-                                      setState(() {
-                                        _localCurrentSong = songData;
-                                      });
-
-                                      widget.onSongPlay(songData);
-
-                                      await widget.musicService.playSong(audioUrl);
-                                    } catch (e) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Failed to play song: ${e.toString()}'),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
-                                    }
-                                  },
-                                ),
-                              );
-                            },
-                            childCount: songs.length,
-                          ),
+                        _SongListView(
+                          songs: songs,
+                          album: widget.album,
+                          musicService: widget.musicService,
+                          onSongPlay: widget.onSongPlay,
+                          onLocalSongUpdate: (songData) {
+                            setState(() {
+                              _localCurrentSong = songData;
+                            });
+                          },
                         ),
                         SliverPadding(padding: EdgeInsets.only(bottom: 100)),
                       ],
@@ -440,6 +354,116 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SongListView extends StatelessWidget {
+  final List<Map<String, dynamic>> songs;
+  final Map<String, dynamic> album;
+  final MusicService musicService;
+  final Function(Map<String, dynamic>) onSongPlay;
+  final Function(Map<String, dynamic>) onLocalSongUpdate;
+
+  const _SongListView({
+    Key? key,
+    required this.songs,
+    required this.album,
+    required this.musicService,
+    required this.onSongPlay,
+    required this.onLocalSongUpdate,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final song = songs[index];
+          return ListTile(
+            contentPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            leading: SizedBox(
+              width: 24,
+              child: Text(
+                '${index + 1}',
+                style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            title: Padding(
+              padding: EdgeInsets.only(left: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    song['title'],
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  Text(
+                    song['artist'],
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ],
+              ),
+            ),
+            subtitle: null,
+            trailing: Text(
+              song['duration'] ?? '0:00',
+              style: TextStyle(
+                color: Colors.grey[400],
+                fontSize: 14,
+              ),
+            ),
+            onTap: () async {
+              try {
+                final audioUrl = song['audio_url'];
+                if (audioUrl == null || audioUrl.isEmpty) {
+                  throw Exception('Song URL is missing');
+                }
+
+                final songData = {
+                  ...song,
+                  'id': song['id'],
+                  'image_url': album['image_url'],
+                  'title': song['title'] ?? 'Unknown Title',
+                  'artist': song['artist'] ?? 'Unknown Artist',
+                  'audio_url': audioUrl,
+                };
+
+                // Update local state first
+                onLocalSongUpdate(songData);
+                
+                // Then update parent state
+                onSongPlay(songData);
+
+                // Finally play the song
+                await musicService.playSong(audioUrl);
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to play song: ${e.toString()}'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+          );
+        },
+        childCount: songs.length,
       ),
     );
   }
