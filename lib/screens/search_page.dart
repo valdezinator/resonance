@@ -1,15 +1,27 @@
 import 'package:flutter/material.dart';
 import '../services/music_service.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../widgets/bottom_player.dart';
+import '../widgets/floating_player_mixin.dart';
 
 class SearchPage extends StatefulWidget {
+  final Map<String, dynamic>? currentSong;
+  final Function(Map<String, dynamic>) onSongPlay;
+  final MusicService musicService;
+
+  const SearchPage({
+    Key? key,
+    this.currentSong,
+    required this.onSongPlay,
+    required this.musicService,
+  }) : super(key: key);
+
   @override
   _SearchPageState createState() => _SearchPageState();
 }
 
-class _SearchPageState extends State<SearchPage> {
+class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
   final TextEditingController _searchController = TextEditingController();
-  final MusicService _musicService = MusicService();
   List<Map<String, dynamic>> _searchResults = [];
   bool _isLoading = false;
   String _selectedFilter = 'all';
@@ -94,7 +106,7 @@ class _SearchPageState extends State<SearchPage> {
 
     try {
       final results =
-          await _musicService.searchSongs(query, filter: _selectedFilter);
+          await widget.musicService.searchSongs(query, filter: _selectedFilter);
       setState(() {
         _searchResults = results;
         _isLoading = false;
@@ -114,100 +126,115 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color.fromARGB(255, 26, 32, 43),
-      child: Column(
-        children: [
-          _buildFilterChips(),
-          // Results list
-          Expanded(
-            child: _isLoading
-                ? Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    itemCount: _searchResults.length,
-                    itemBuilder: (context, index) {
-                      final song = _searchResults[index];
-                      return ListTile(
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: Image.network(
-                            song['image_url'] ?? '',
-                            width: 48,
-                            height: 48,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                              width: 48,
-                              height: 48,
-                              color: Colors.grey[800],
-                              child:
-                                  Icon(Icons.music_note, color: Colors.white),
+    return Stack(
+      children: [
+        Column(
+          children: [
+            Expanded(
+              child: Container(
+                color: const Color.fromARGB(255, 26, 32, 43),
+                child: Column(
+                  children: [
+                    _buildFilterChips(),
+                    // Results list
+                    Expanded(
+                      child: _isLoading
+                          ? Center(child: CircularProgressIndicator())
+                          : ListView.builder(
+                              itemCount: _searchResults.length,
+                              itemBuilder: (context, index) {
+                                final song = _searchResults[index];
+                                return ListTile(
+                                  leading: ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Image.network(
+                                      song['image_url'] ?? '',
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) =>
+                                          Container(
+                                        width: 48,
+                                        height: 48,
+                                        color: Colors.grey[800],
+                                        child:
+                                            Icon(Icons.music_note, color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    song['title'] ?? 'Unknown Title',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                  subtitle: Text(
+                                    song['artist'] ?? 'Unknown Artist',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                  onTap: () async {
+                                    try {
+                                      final audioUrl = song['mp3_url'] as String?;
+                                      if (audioUrl == null || audioUrl.isEmpty) {
+                                        throw Exception('Song URL is missing');
+                                      }
+                                      final nextSongIndex = index + 1;
+                                      String? nextUrl;
+                                      if (nextSongIndex < _searchResults.length) {
+                                        nextUrl = _searchResults[nextSongIndex]['mp3_url'] as String?;
+                                      }
+                                      await widget.musicService.playSong(audioUrl, nextSongUrl: nextUrl);
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              'Failed to play song: ${e.toString()}'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                    // Search bar at bottom
+                    Container(
+                      margin: EdgeInsets.only(left: 16, right: 16, bottom: 5),
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(38, 255, 255, 255),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        style: TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Search songs...',
+                          hintStyle: TextStyle(color: Colors.grey),
+                          prefixIcon: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: SvgPicture.asset(
+                              'assets/icons/search_icon.svg',
+                              colorFilter: ColorFilter.mode(Colors.grey, BlendMode.srcIn),
                             ),
                           ),
+                          border: InputBorder.none,
+                          contentPadding:
+                              EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         ),
-                        title: Text(
-                          song['title'] ?? 'Unknown Title',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        subtitle: Text(
-                          song['artist'] ?? 'Unknown Artist',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                        onTap: () async {
-                          try {
-                            final audioUrl = song['mp3_url'] as String?;
-                            if (audioUrl == null || audioUrl.isEmpty) {
-                              throw Exception('Song URL is missing');
-                            }
-                            final nextSongIndex = index + 1;
-                            String? nextUrl;
-                            if (nextSongIndex < _searchResults.length) {
-                              nextUrl = _searchResults[nextSongIndex]['mp3_url'] as String?;
-                            }
-                            await _musicService.playSong(audioUrl, nextSongUrl: nextUrl);
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                    'Failed to play song: ${e.toString()}'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        },
-                      );
-                    },
-                  ),
-          ),
-          // Search bar at bottom
-          Container(
-            margin: EdgeInsets.only(left: 16, right: 16, bottom: 5),
-            decoration: BoxDecoration(
-              color: const Color.fromARGB(38, 255, 255, 255),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: TextField(
-              controller: _searchController,
-              style: TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Search songs...',
-                hintStyle: TextStyle(color: Colors.grey),
-                prefixIcon: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: SvgPicture.asset(
-                    'assets/icons/search_icon.svg',
-                    colorFilter: ColorFilter.mode(Colors.grey, BlendMode.srcIn),
-                  ),
+                        onChanged: _performSearch,
+                      ),
+                    ),
+                  ],
                 ),
-                border: InputBorder.none,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
-              onChanged: _performSearch,
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+        buildFloatingBottomPlayer(
+          currentSong: widget.currentSong,
+          musicService: widget.musicService,
+          onSongPlay: widget.onSongPlay,
+        ),
+      ],
     );
   }
 

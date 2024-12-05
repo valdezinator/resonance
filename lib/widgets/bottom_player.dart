@@ -24,6 +24,15 @@ class BottomPlayer extends StatefulWidget {
 class _BottomPlayerState extends State<BottomPlayer> {
   bool isPlaying = false;
 
+  @override
+  void didUpdateWidget(BottomPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Check if the current song has changed
+    if (widget.currentSong?['id'] != oldWidget.currentSong?['id']) {
+      setState(() {});
+    }
+  }
+
   void _showFullScreenPlayer() {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -64,8 +73,7 @@ class _BottomPlayerState extends State<BottomPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.currentSong == null || 
-        widget.currentSong!['title'] == null) {
+    if (widget.currentSong == null || widget.currentSong!['title'] == null) {
       return const SizedBox.shrink();
     }
 
@@ -122,14 +130,14 @@ class _BottomPlayerState extends State<BottomPlayer> {
                                       color: Colors.grey[800],
                                       child: Center(
                                         child: CircularProgressIndicator(
-                                          value:
-                                              loadingProgress.expectedTotalBytes !=
-                                                      null
-                                                  ? loadingProgress
-                                                          .cumulativeBytesLoaded /
-                                                      loadingProgress
-                                                          .expectedTotalBytes!
-                                                  : null,
+                                          value: loadingProgress
+                                                      .expectedTotalBytes !=
+                                                  null
+                                              ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
+                                              : null,
                                         ),
                                       ),
                                     );
@@ -173,7 +181,16 @@ class _BottomPlayerState extends State<BottomPlayer> {
                                   icon: const Icon(Icons.skip_previous),
                                   iconSize: 24,
                                   color: Colors.white,
-                                  onPressed: () {},
+                                  onPressed: () async {
+                                    // Implement skip to previous logic
+                                    if (await widget.musicService.position > Duration(seconds: 3)) {
+                                      // If more than 3 seconds in, restart song
+                                      widget.musicService.seek(Duration.zero);
+                                    } else {
+                                      // Otherwise go to previous song
+                                      widget.musicService.playPrevious();
+                                    }
+                                  },
                                 ),
                                 StreamBuilder<PlayerState>(
                                   stream: widget.musicService.playerStateStream,
@@ -218,7 +235,7 @@ class _BottomPlayerState extends State<BottomPlayer> {
                                   icon: const Icon(Icons.skip_next),
                                   iconSize: 24,
                                   color: Colors.white,
-                                  onPressed: () {},
+                                  onPressed: widget.musicService.playNext,
                                 ),
                               ],
                             ),

@@ -1,10 +1,15 @@
 import 'package:just_audio/just_audio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'local_storage_service.dart';
+import 'package:http/http.dart' as http;
 
 class MusicService {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final _supabase = Supabase.instance.client;
   late ConcatenatingAudioSource _playlist;
+  LoopMode _loopMode = LoopMode.off;
+  bool _shuffleEnabled = false;
+  final _localStorageService = LocalStorageService();
 
   MusicService() {
     _playlist = ConcatenatingAudioSource(children: []);
@@ -28,6 +33,7 @@ class MusicService {
   Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
   Stream<Duration> get positionStream => _audioPlayer.positionStream;
   Stream<Duration?> get durationStream => _audioPlayer.durationStream;
+  Future<Duration> get position async => await _audioPlayer.position;
 
   Future<List<Map<String, dynamic>>> getQuickPlaySongs({
     int offset = 0,
@@ -225,5 +231,142 @@ class MusicService {
       print('Error fetching top charts: $e');
       return [];
     }
+  }
+
+  Future<List<Map<String, dynamic>>> getArtistSongs(String artistId) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('songs')
+          .select()
+          .eq('artist_id', artistId)
+          .order('plays', ascending: false)
+          .limit(10);
+
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (e) {
+      throw Exception('Failed to fetch artist songs: $e');
+    }
+  }
+
+  Future<void> createPlaylist(String name, String description) async {
+    await _supabase.from('playlists').insert({
+      'name': name,
+      'description': description,
+      'user_id': _supabase.auth.currentUser?.id,
+    });
+  }
+
+  Future<void> addToPlaylist(String playlistId, String songId) async {
+    await _supabase.from('playlist_songs').insert({
+      'playlist_id': playlistId,
+      'song_id': songId,
+    });
+  }
+
+  final List<Map<String, dynamic>> _queue = [];
+
+  void addToQueue(Map<String, dynamic> song) {
+    _queue.add(song);
+  }
+
+  Future<void> playNext() async {
+    if (_queue.isNotEmpty) {
+      final nextSong = _queue.removeAt(0);
+      await playSong(nextSong['mp3_url']);
+    }
+  }
+
+  Future<void> playPrevious() async {
+    await _audioPlayer.seekToPrevious();
+  }
+
+  Future<void> likeSong(String songId) async {
+    await _supabase.from('liked_songs').insert({
+      'user_id': _supabase.auth.currentUser?.id,
+      'song_id': songId,
+      'liked_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<bool> isLiked(String songId) async {
+    final response = await _supabase
+        .from('liked_songs')
+        .select()
+        .eq('user_id', _supabase.auth.currentUser!.id)
+        .eq('song_id', songId)
+        .single();
+    return response != null;
+  }
+
+  Future<void> toggleShuffle() async {
+    _shuffleEnabled = !_shuffleEnabled;
+    await _audioPlayer.setShuffleModeEnabled(_shuffleEnabled);
+  }
+
+  Future<void> cycleLoopMode() async {
+    switch (_loopMode) {
+      case LoopMode.off:
+        _loopMode = LoopMode.all;
+        break;
+      case LoopMode.all:
+        _loopMode = LoopMode.one;
+        break;
+      case LoopMode.one:
+        _loopMode = LoopMode.off;
+        break;
+    }
+    await _audioPlayer.setLoopMode(_loopMode);
+  }
+
+  Future<void> followUser(String userId) async {
+    await _supabase.from('follows').insert({
+      'follower_id': _supabase.auth.currentUser?.id,
+      'following_id': userId,
+    });
+  }
+
+  Future<void> sharePlaylist(String playlistId, String userId) async {
+    await _supabase.from('shared_playlists').insert({
+      'playlist_id': playlistId,
+      'shared_with': userId,
+      'shared_by': _supabase.auth.currentUser?.id,
+    });
+  }
+
+  Future<void> downloadSong(Map<String, dynamic> song) async {
+    // Download song file
+    final bytes = await _downloadFile(song['mp3_url']);
+    // Save to local storage
+    await _localStorageService.saveSong(song['id'], bytes);
+    // Update downloaded songs list
+    await _localStorageService.addToDownloadedSongs(song);
+  }
+
+  Future<List<Map<String, dynamic>>> getDownloadedSongs() async {
+    return await _localStorageService.getDownloadedSongs();
+  }
+
+  Future<List<Map<String, dynamic>>> getRecommendations() async {
+    // Get user's listening history
+    final history = await _supabase
+        .from('listening_history')
+        .select()
+        .eq('user_id', _supabase.auth.currentUser!.id)
+        .order('played_at', ascending: false)
+        .limit(50);
+
+    // Use this to get similar songs
+    return await _supabase.rpc('get_recommendations', params: {
+      'user_id': _supabase.auth.currentUser!.id,
+      'history': history
+    });
+  }
+
+  Future<List<int>> _downloadFile(String url) async {
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    }
+    throw Exception('Failed to download file');
   }
 }

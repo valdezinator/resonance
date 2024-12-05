@@ -10,6 +10,7 @@ import 'screens/settings_page.dart';
 import 'screens/album_details_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:math' as math;
+import 'screens/artist_details_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -99,277 +100,309 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Widget _buildFloatingBottomPlayer() {
+    if (currentSong == null) return const SizedBox.shrink();
+
+    return Positioned(
+      left: 2,
+      right: 2,
+      bottom: 5,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 10,
+              offset: Offset(0, 5),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: BottomPlayer(
+            key: ValueKey(currentSong!['id']),
+            musicService: _musicService,
+            currentSong: currentSong,
+            onClose: () {
+              setState(() {
+                currentSong = null;
+              });
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // backgroundColor: const Color(0xFF0C0F14),
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color.fromARGB(255, 20, 25, 34),
       body: SafeArea(
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                const Color(0xFF500B0B), // Dark red at top
-                const Color.fromARGB(
-                    255, 143, 70, 22), // Darker red-black in middle
-                const Color.fromARGB(26, 175, 110, 117),
-                const Color(0xFF0C0F14), // Pure black at bottom
-              ],
-              stops: const [0.0, 0.35, 0.70, 0.7],
-            ),
-          ),
-          child: _selectedIndex == 1
-              ? SearchPage()
-              : _selectedIndex == 2
-                  ? SettingsPage()
-                  : SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Header with greeting
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(),
+              child: _selectedIndex == 1
+                  ? SearchPage(
+                      currentSong: currentSong,
+                      onSongPlay: (song) {
+                        setState(() {
+                          currentSong = song;
+                        });
+                      },
+                      musicService: _musicService,
+                    )
+                  : _selectedIndex == 2
+                      ? SettingsPage(
+                          currentSong: currentSong,
+                          onSongPlay: (song) {
+                            setState(() {
+                              currentSong = song;
+                            });
+                          },
+                          musicService: _musicService,
+                        )
+                      : SingleChildScrollView(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                // Header with greeting
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Good\nmorning Peter✨',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    CircleAvatar(
+                                      backgroundColor: Colors.blue[900],
+                                      radius: 20,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+
+                                // Chips row
+                                Row(
+                                  children: [
+                                    Chip(
+                                      label: Text('Feel Good',
+                                          style:
+                                              TextStyle(color: Colors.white)),
+                                      backgroundColor: Colors.grey[800],
+                                    ),
+                                    SizedBox(width: 8),
+                                    Chip(
+                                      label: Text('Party',
+                                          style:
+                                              TextStyle(color: Colors.white)),
+                                      backgroundColor: Colors.grey[800],
+                                    ),
+                                    SizedBox(width: 8),
+                                    Chip(
+                                      label: Text('Party',
+                                          style:
+                                              TextStyle(color: Colors.white)),
+                                      backgroundColor: Colors.grey[800],
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 24),
+
+                                // Quick Play section
                                 Text(
-                                  'Good\nmorning Peter✨',
+                                  'Quick Play',
                                   style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 24,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                CircleAvatar(
-                                  backgroundColor: Colors.blue[900],
-                                  radius: 20,
+                                SizedBox(height: 16),
+
+                                // Grid of songs from Supabase
+                                _buildSongsList(),
+
+                                SizedBox(height: 24),
+
+                                // Just the Hits section
+                                Text(
+                                  'Just the Hits',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
+                                SizedBox(height: 16),
+
+                                // Albums list
+                                SizedBox(
+                                  height: 220,
+                                  child:
+                                      FutureBuilder<List<Map<String, dynamic>>>(
+                                    future: _albumsFuture,
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState ==
+                                          ConnectionState.waiting) {
+                                        return Center(
+                                            child: CircularProgressIndicator());
+                                      }
+
+                                      if (snapshot.hasError) {
+                                        return Text(
+                                          'Error loading albums: ${snapshot.error}',
+                                          style: TextStyle(color: Colors.red),
+                                        );
+                                      }
+
+                                      final albums = snapshot.data ?? [];
+
+                                      return ListView.builder(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: albums.length,
+                                        itemBuilder: (context, index) {
+                                          return _buildAlbumTile(albums[index]);
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+
+                                // Recommended Artists section
+                                SizedBox(height: 32),
+
+                                // Recommended Artists section
+                                Text(
+                                  'Recommended Artists',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+
+                                // Artists list
+                                SizedBox(
+                                  height: 160,
+                                  child:
+                                      FutureBuilder<List<Map<String, dynamic>>>(
+                                    future: _artistsFuture,
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState ==
+                                          ConnectionState.waiting) {
+                                        return Center(
+                                            child: CircularProgressIndicator());
+                                      }
+
+                                      if (snapshot.hasError) {
+                                        return Text(
+                                          'Error loading artists: ${snapshot.error}',
+                                          style: TextStyle(color: Colors.red),
+                                        );
+                                      }
+
+                                      final artists = snapshot.data ?? [];
+
+                                      return ListView.builder(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: artists.length,
+                                        itemBuilder: (context, index) {
+                                          return _buildArtistTile(
+                                              artists[index]);
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+
+                                SizedBox(height: 32),
+                                _buildRecentlyPlayed(),
+
+                                SizedBox(height: 32),
+                                _buildMadeForYou(),
+
+                                SizedBox(height: 32),
+                                _buildTopCharts(),
+
+                                // Bottom navigation bar will be handled separately
                               ],
                             ),
-                            const SizedBox(height: 20),
-
-                            // Chips row
-                            Row(
-                              children: [
-                                Chip(
-                                  label: Text('Feel Good',
-                                      style: TextStyle(color: Colors.white)),
-                                  backgroundColor: Colors.grey[800],
-                                ),
-                                SizedBox(width: 8),
-                                Chip(
-                                  label: Text('Party',
-                                      style: TextStyle(color: Colors.white)),
-                                  backgroundColor: Colors.grey[800],
-                                ),
-                                SizedBox(width: 8),
-                                Chip(
-                                  label: Text('Party',
-                                      style: TextStyle(color: Colors.white)),
-                                  backgroundColor: Colors.grey[800],
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 24),
-
-                            // Quick Play section
-                            Text(
-                              'Quick Play',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 16),
-
-                            // Grid of songs from Supabase
-                            _buildSongsList(),
-
-                            SizedBox(height: 24),
-
-                            // Just the Hits section
-                            Text(
-                              'Just the Hits',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 16),
-
-                            // Albums list
-                            SizedBox(
-                              height: 220,
-                              child: FutureBuilder<List<Map<String, dynamic>>>(
-                                future: _albumsFuture,
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState ==
-                                      ConnectionState.waiting) {
-                                    return Center(
-                                        child: CircularProgressIndicator());
-                                  }
-
-                                  if (snapshot.hasError) {
-                                    return Text(
-                                      'Error loading albums: ${snapshot.error}',
-                                      style: TextStyle(color: Colors.red),
-                                    );
-                                  }
-
-                                  final albums = snapshot.data ?? [];
-
-                                  return ListView.builder(
-                                    scrollDirection: Axis.horizontal,
-                                    itemCount: albums.length,
-                                    itemBuilder: (context, index) {
-                                      return _buildAlbumTile(albums[index]);
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-
-                            // Recommended Artists section
-                            SizedBox(height: 32),
-
-                            // Recommended Artists section
-                            Text(
-                              'Recommended Artists',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 16),
-
-                            // Artists list
-                            SizedBox(
-                              height: 160,
-                              child: FutureBuilder<List<Map<String, dynamic>>>(
-                                future: _artistsFuture,
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState ==
-                                      ConnectionState.waiting) {
-                                    return Center(
-                                        child: CircularProgressIndicator());
-                                  }
-
-                                  if (snapshot.hasError) {
-                                    return Text(
-                                      'Error loading artists: ${snapshot.error}',
-                                      style: TextStyle(color: Colors.red),
-                                    );
-                                  }
-
-                                  final artists = snapshot.data ?? [];
-
-                                  return ListView.builder(
-                                    scrollDirection: Axis.horizontal,
-                                    itemCount: artists.length,
-                                    itemBuilder: (context, index) {
-                                      return _buildArtistTile(artists[index]);
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-
-                            SizedBox(height: 32),
-                            _buildRecentlyPlayed(),
-
-                            SizedBox(height: 32),
-                            _buildMadeForYou(),
-
-                            SizedBox(height: 32),
-                            _buildTopCharts(),
-
-                            // Bottom navigation bar will be handled separately
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
+            ),
+            _buildFloatingBottomPlayer(),
+          ],
         ),
       ),
       bottomNavigationBar: Material(
         color: Colors.transparent,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (currentSong != null)
-              BottomPlayer(
-                key: ValueKey(currentSong!['id']),
-                musicService: _musicService,
-                currentSong: currentSong,
-                onClose: () {
-                  setState(() {
-                    currentSong = null;
-                  });
-                },
-              ),
-            Container(
-              height: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFF282828), // Fixed dark color for nav bar
-                border: Border(
-                  top: BorderSide(
-                    color: Colors.black.withOpacity(0.1),
-                    width: 0.5,
-                  ),
-                ),
-              ),
-              child: BottomNavigationBar(
-                elevation: 0,
-                backgroundColor:
-                    Colors.transparent, // Make nav bar background transparent
-                selectedItemColor: Colors.white,
-                unselectedItemColor: Colors.grey,
-                currentIndex: _selectedIndex,
-                type: BottomNavigationBarType.fixed,
-                onTap: (index) {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
-                },
-                items: [
-                  BottomNavigationBarItem(
-                    icon: SvgPicture.asset(
-                      'assets/icons/home_icon.svg',
-                      colorFilter: ColorFilter.mode(
-                        _selectedIndex == 0 ? Colors.white : Colors.grey,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    label: 'Home',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: SvgPicture.asset(
-                      'assets/icons/search_icon.svg',
-                      colorFilter: ColorFilter.mode(
-                        _selectedIndex == 1 ? Colors.white : Colors.grey,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    label: 'Search',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: SvgPicture.asset(
-                      'assets/icons/profile_icon.svg',
-                      colorFilter: ColorFilter.mode(
-                        _selectedIndex == 2 ? Colors.white : Colors.grey,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    label: 'Profile',
-                  ),
-                ],
+        child: Container(
+          height: 80,
+          decoration: BoxDecoration(
+            color: const Color(0xFF282828),
+            border: Border(
+              top: BorderSide(
+                color: Colors.black.withOpacity(0.1),
+                width: 0.5,
               ),
             ),
-          ],
+          ),
+          child: BottomNavigationBar(
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            selectedItemColor: Colors.white,
+            unselectedItemColor: Colors.grey,
+            currentIndex: _selectedIndex,
+            type: BottomNavigationBarType.fixed,
+            onTap: (index) {
+              setState(() {
+                _selectedIndex = index;
+              });
+            },
+            items: [
+              BottomNavigationBarItem(
+                icon: SvgPicture.asset(
+                  'assets/icons/home_icon.svg',
+                  colorFilter: ColorFilter.mode(
+                    _selectedIndex == 0 ? Colors.white : Colors.grey,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                label: 'Home',
+              ),
+              BottomNavigationBarItem(
+                icon: SvgPicture.asset(
+                  'assets/icons/search_icon.svg',
+                  colorFilter: ColorFilter.mode(
+                    _selectedIndex == 1 ? Colors.white : Colors.grey,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                label: 'Search',
+              ),
+              BottomNavigationBarItem(
+                icon: SvgPicture.asset(
+                  'assets/icons/profile_icon.svg',
+                  colorFilter: ColorFilter.mode(
+                    _selectedIndex == 2 ? Colors.white : Colors.grey,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                label: 'Profile',
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -561,47 +594,66 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildArtistTile(Map<String, dynamic> artist) {
-    return Container(
-      key: ValueKey('artist_${artist['id']}'),
-      width: 120,
-      margin: EdgeInsets.only(right: 16),
-      child: Column(
-        children: [
-          // Artist Image
-          ClipOval(
-            child: CachedNetworkImage(
-              imageUrl: artist['image_url'] as String,
-              width: 120,
-              height: 120,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                width: 120,
-                height: 120,
-                color: Colors.grey[900],
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              errorWidget: (context, url, error) => Container(
-                width: 120,
-                height: 120,
-                color: Colors.grey[900],
-                child: Icon(Icons.person, color: Colors.white, size: 40),
-              ),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ArtistDetailsPage(
+              artist: artist,
+              musicService: _musicService,
+              onSongPlay: (song) {
+                setState(() {
+                  currentSong = song;
+                });
+              },
+              currentSong: currentSong,
             ),
           ),
-          SizedBox(height: 8),
-          // Artist Name
-          Text(
-            artist['artist'] as String,
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
+        );
+      },
+      child: Container(
+        key: ValueKey('artist_${artist['id']}'),
+        width: 120,
+        margin: EdgeInsets.only(right: 16),
+        child: Column(
+          children: [
+            // Artist Image
+            ClipOval(
+              child: CachedNetworkImage(
+                imageUrl: artist['image_url'] as String,
+                width: 120,
+                height: 120,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                  width: 120,
+                  height: 120,
+                  color: Colors.grey[900],
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  width: 120,
+                  height: 120,
+                  color: Colors.grey[900],
+                  child: Icon(Icons.person, color: Colors.white, size: 40),
+                ),
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-          ),
-        ],
+            SizedBox(height: 8),
+            // Artist Name
+            Text(
+              artist['artist'] as String,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

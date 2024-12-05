@@ -3,6 +3,7 @@ import '../services/music_service.dart';
 import '../widgets/bottom_player.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:palette_generator/palette_generator.dart';
+import '../widgets/floating_player_mixin.dart';
 
 class AlbumDetailsPage extends StatefulWidget {
   final Map<String, dynamic> album;
@@ -26,13 +27,25 @@ class AlbumDetailsPage extends StatefulWidget {
   State<AlbumDetailsPage> createState() => _AlbumDetailsPageState();
 }
 
-class _AlbumDetailsPageState extends State<AlbumDetailsPage> {
+class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayerMixin {
   PaletteGenerator? _palette;
+  Map<String, dynamic>? _localCurrentSong;
 
   @override
   void initState() {
     super.initState();
     _loadImagePalette();
+    _localCurrentSong = widget.currentSong;
+  }
+
+  @override
+  void didUpdateWidget(AlbumDetailsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.currentSong != oldWidget.currentSong) {
+      setState(() {
+        _localCurrentSong = widget.currentSong;
+      });
+    }
   }
 
   Future<void> _loadImagePalette() async {
@@ -66,336 +79,367 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF0C0F14),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -0.5),
-            radius: 1.5,
-            colors: [
-              dominantColor.withOpacity(0.3),
-              dominantColor.withOpacity(0.1),
-              const Color(0xFF0C0F14),
-            ],
-            stops: const [0.0, 0.4, 1.0],
-          ),
-        ),
-        child: Stack(
-          children: [
-            FutureBuilder<List<Map<String, dynamic>>>(
-              future: widget.musicService.getAlbumSongs(widget.album['id']),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(0, -0.5),
+                radius: 1.5,
+                colors: [
+                  dominantColor.withOpacity(0.3),
+                  dominantColor.withOpacity(0.1),
+                  const Color(0xFF0C0F14),
+                ],
+                stops: const [0.0, 0.4, 1.0],
+              ),
+            ),
+            child: Stack(
+              children: [
+                FutureBuilder<List<Map<String, dynamic>>>(
+                  future: widget.musicService.getAlbumSongs(widget.album['id']),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Center(child: CircularProgressIndicator());
+                    }
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      'Error loading songs: ${snapshot.error}',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  );
-                }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Error loading songs: ${snapshot.error}',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      );
+                    }
 
-                final songs = snapshot.data ?? [];
+                    final songs = snapshot.data ?? [];
 
-                return CustomScrollView(
-                  slivers: [
-                    SliverAppBar(
-                      expandedHeight: 60,
-                      backgroundColor: Colors.transparent,
-                      pinned: true,
-                      leading: IconButton(
-                        icon: Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.only(
-                          left: 16.0,
-                          right: 16.0,
-                          top: 0,
-                          bottom: 16.0,
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 10,
-                                    offset: Offset(0, 5),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  widget.album['image_url'],
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
+                    return CustomScrollView(
+                      slivers: [
+                        SliverAppBar(
+                          expandedHeight: 60,
+                          backgroundColor: Colors.transparent,
+                          pinned: true,
+                          leading: IconButton(
+                            icon: Icon(
+                              Icons.keyboard_arrow_down,
+                              color: Colors.white,
+                              size: 32,
                             ),
-                            SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.album['title'],
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    widget.album['artist'],
-                                    style: TextStyle(
-                                      color: Colors.grey[400],
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            try {
-                              final songs = await widget.musicService
-                                  .getAlbumSongs(widget.album['id']);
-                              
-                              if (songs.isNotEmpty) {
-                                widget.onSongPlay({
-                                  ...songs[0],
-                                  'image_url': widget.album['image_url'],
-                                });
-                                
-                                await widget.musicService.playAllSongs(songs);
-                              }
-                            } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                      'Failed to play album: ${e.toString()}'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            minimumSize: Size(120, 48),
+                            onPressed: () => Navigator.pop(context),
                           ),
-                          child: Text(
-                            'Play All',
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              left: 16.0,
+                              right: 16.0,
+                              top: 0,
+                              bottom: 16.0,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 100,
+                                  height: 100,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.3),
+                                        blurRadius: 10,
+                                        offset: Offset(0, 5),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      widget.album['image_url'],
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        widget.album['title'],
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        widget.album['artist'],
+                                        style: TextStyle(
+                                          color: Colors.grey[400],
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 32.0, vertical: 8.0),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 24,
-                              child: Text(
-                                '#',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Title',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ),
-                            Text(
-                              'Duration',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final song = songs[index];
-                          return Container(
-                            margin: EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: ListTile(
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 8),
-                              leading: SizedBox(
-                                width: 24,
-                                child: Text(
-                                  '${index + 1}',
-                                  style: TextStyle(
-                                    color: Colors.grey[400],
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                              title: Padding(
-                                padding: EdgeInsets.only(left: 8),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      song['title'],
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
-                                    ),
-                                    Text(
-                                      song['artist'],
-                                      style: TextStyle(
-                                        color: Colors.grey[400],
-                                        fontSize: 14,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              subtitle: null,
-                              trailing: Text(
-                                song['duration'] ?? '0:00',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 14,
-                                ),
-                              ),
-                              onTap: () async {
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: ElevatedButton(
+                              onPressed: () async {
                                 try {
-                                  final audioUrl = song['audio_url'] as String?;
-                                  if (audioUrl == null || audioUrl.isEmpty) {
-                                    throw Exception('Song URL is missing');
+                                  final songs = await widget.musicService
+                                      .getAlbumSongs(widget.album['id']);
+
+                                  if (songs.isNotEmpty) {
+                                    widget.onSongPlay({
+                                      ...songs[0],
+                                      'image_url': widget.album['image_url'],
+                                    });
+
+                                    await widget.musicService.playAllSongs(songs);
                                   }
-                                  
-                                  widget.onSongPlay({
-                                    ...song,
-                                    'image_url': widget.album['image_url'],
-                                  });
-                                  
-                                  await widget.musicService.playSong(audioUrl);
                                 } catch (e) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(
-                                          'Failed to play song: ${e.toString()}'),
+                                          'Failed to play album: ${e.toString()}'),
                                       backgroundColor: Colors.red,
                                     ),
                                   );
                                 }
                               },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                minimumSize: Size(120, 48),
+                              ),
+                              child: Text(
+                                'Play All',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
                             ),
-                          );
-                        },
-                        childCount: songs.length,
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 32.0, vertical: 8.0),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 24,
+                                  child: Text(
+                                    '#',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Title',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ),
+                                Text(
+                                  'Duration',
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final song = songs[index];
+                              return Container(
+                                margin: EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 24, vertical: 8),
+                                  leading: SizedBox(
+                                    width: 24,
+                                    child: Text(
+                                      '${index + 1}',
+                                      style: TextStyle(
+                                        color: Colors.grey[400],
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Padding(
+                                    padding: EdgeInsets.only(left: 8),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          song['title'],
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                        ),
+                                        Text(
+                                          song['artist'],
+                                          style: TextStyle(
+                                            color: Colors.grey[400],
+                                            fontSize: 14,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  subtitle: null,
+                                  trailing: Text(
+                                    song['duration'] ?? '0:00',
+                                    style: TextStyle(
+                                      color: Colors.grey[400],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  onTap: () async {
+                                    try {
+                                      final audioUrl = song['audio_url'];
+                                      if (audioUrl == null || audioUrl.isEmpty) {
+                                        throw Exception('Song URL is missing');
+                                      }
+
+                                      final songData = {
+                                        ...song,
+                                        'id': song['id'],
+                                        'image_url': widget.album['image_url'],
+                                        'title': song['title'] ?? 'Unknown Title',
+                                        'artist': song['artist'] ?? 'Unknown Artist',
+                                        'audio_url': audioUrl,
+                                      };
+
+                                      setState(() {
+                                        _localCurrentSong = songData;
+                                      });
+
+                                      widget.onSongPlay(songData);
+
+                                      await widget.musicService.playSong(audioUrl);
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Failed to play song: ${e.toString()}'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                            childCount: songs.length,
+                          ),
+                        ),
+                        SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+                      ],
+                    );
+                  },
+                ),
+                buildFloatingBottomPlayer(
+                  currentSong: _localCurrentSong,
+                  musicService: widget.musicService,
+                  onSongPlay: (song) {
+                    setState(() {
+                      _localCurrentSong = song;
+                    });
+                    widget.onSongPlay(song);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: Material(
+        color: Colors.transparent,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(0xFF282828), // Fixed dark color for nav bar
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.black.withOpacity(0.1),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: BottomNavigationBar(
+                elevation: 0,
+                backgroundColor: Colors.transparent,
+                selectedItemColor: Colors.white,
+                unselectedItemColor: Colors.grey,
+                currentIndex: widget.selectedIndex,
+                type: BottomNavigationBarType.fixed,
+                onTap: widget.onIndexChanged,
+                items: [
+                  BottomNavigationBarItem(
+                    icon: SvgPicture.asset(
+                      'assets/icons/home_icon.svg',
+                      colorFilter: ColorFilter.mode(
+                        widget.selectedIndex == 0 ? Colors.white : Colors.grey,
+                        BlendMode.srcIn,
                       ),
                     ),
-                    SliverPadding(padding: EdgeInsets.only(bottom: 100)),
-                  ],
-                );
-              },
+                    label: 'Home',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: SvgPicture.asset(
+                      'assets/icons/search_icon.svg',
+                      colorFilter: ColorFilter.mode(
+                        widget.selectedIndex == 1 ? Colors.white : Colors.grey,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    label: 'Search',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: SvgPicture.asset(
+                      'assets/icons/profile_icon.svg',
+                      colorFilter: ColorFilter.mode(
+                        widget.selectedIndex == 2 ? Colors.white : Colors.grey,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    label: 'Profile',
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.currentSong != null)
-            BottomPlayer(
-              key: ValueKey(widget.currentSong!['id']),
-              musicService: widget.musicService,
-              currentSong: widget.currentSong,
-              onClose: () {
-                widget.onSongPlay({});
-              },
-            ),
-          BottomNavigationBar(
-            backgroundColor: const Color.fromARGB(59, 0, 0, 0),
-            selectedItemColor: Colors.white,
-            unselectedItemColor: Colors.grey,
-            currentIndex: widget.selectedIndex,
-            onTap: widget.onIndexChanged,
-            items: [
-              BottomNavigationBarItem(
-                icon: SvgPicture.asset(
-                  'assets/icons/home_icon.svg',
-                  colorFilter: ColorFilter.mode(
-                    widget.selectedIndex == 0 ? Colors.white : Colors.grey,
-                    BlendMode.srcIn,
-                  ),
-                ),
-                label: 'Home',
-              ),
-              BottomNavigationBarItem(
-                icon: SvgPicture.asset(
-                  'assets/icons/search_icon.svg',
-                  colorFilter: ColorFilter.mode(
-                    widget.selectedIndex == 1 ? Colors.white : Colors.grey,
-                    BlendMode.srcIn,
-                  ),
-                ),
-                label: 'Search',
-              ),
-              BottomNavigationBarItem(
-                icon: SvgPicture.asset(
-                  'assets/icons/profile_icon.svg',
-                  colorFilter: ColorFilter.mode(
-                    widget.selectedIndex == 2 ? Colors.white : Colors.grey,
-                    BlendMode.srcIn,
-                  ),
-                ),
-                label: 'Profile',
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

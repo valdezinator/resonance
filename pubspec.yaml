@@ -28,16 +28,20 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  audio_service: ^0.18.12
   audio_video_progress_bar: ^2.0.1
+  cached_network_image: ^3.3.0
   cupertino_icons: ^1.0.8
   flutter:
     sdk: flutter
   flutter_dotenv: ^5.1.0
   flutter_svg: ^2.0.9
+  http: ^1.2.0
   just_audio: ^0.9.36
+  just_audio_background: ^0.0.1-beta.11
   palette_generator: ^0.3.3+5
+  shared_preferences: ^2.3.3
   supabase_flutter: ^2.8.1
-  cached_network_image: ^3.3.0
 
 dev_dependencies:
   flutter_lints: ^5.0.0
