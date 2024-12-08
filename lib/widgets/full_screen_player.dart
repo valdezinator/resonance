@@ -8,12 +8,14 @@ class FullScreenPlayer extends StatefulWidget {
   final MusicService musicService;
   final Map<String, dynamic> currentSong;
   final VoidCallback onClose;
+  final Function(Map<String, dynamic>) onSongChange;
 
   const FullScreenPlayer({
     Key? key,
     required this.musicService,
     required this.currentSong,
     required this.onClose,
+    required this.onSongChange,
   }) : super(key: key);
 
   @override
@@ -33,17 +35,9 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
     
     // Listen for song changes
     widget.musicService.currentSongStream.listen((newSong) {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => FullScreenPlayer(
-              musicService: widget.musicService,
-              currentSong: newSong,
-              onClose: widget.onClose,
-            ),
-          ),
-        );
+      if (mounted && newSong != null && newSong != widget.currentSong) {
+        widget.onSongChange(newSong);
+        _loadImagePalette();
       }
     });
   }

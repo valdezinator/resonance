@@ -6,7 +6,7 @@ import '../widgets/floating_player_mixin.dart';
 class ArtistDetailsPage extends StatefulWidget {
   final Map<String, dynamic> artist;
   final MusicService musicService;
-  final Function(Map<String, dynamic>) onSongPlay;
+  final Function(Map<String, dynamic>?) onSongPlay;
   final Map<String, dynamic>? currentSong;
 
   const ArtistDetailsPage({

@@ -41,6 +41,9 @@ class _BottomPlayerState extends State<BottomPlayer> {
             musicService: widget.musicService,
             currentSong: widget.currentSong!,
             onClose: () => Navigator.pop(context),
+            onSongChange: (song) {
+              setState(() {});  // Refresh UI when song changes
+            },
           );
         },
         transitionsBuilder: (context, animation, secondaryAnimation, child) {

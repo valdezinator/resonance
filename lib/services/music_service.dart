@@ -23,25 +23,22 @@ class MusicService {
 
   Future<void> _initAudioPlayer() async {
     await _audioPlayer.setPreferredPeakBitRate(320000);
-
-    // Configures auto-advance behavior
     _audioPlayer.setAutomaticallyWaitsToMinimizeStalling(true);
 
-    // Listens for song completion to play next
+    // Listen to current playing audio
+    _audioPlayer.currentIndexStream.listen((index) {
+      if (index != null && _playlist.sequence.isNotEmpty) {
+        final currentSong =
+            _playlist.sequence[index].tag as Map<String, dynamic>;
+        _currentSongController.add(currentSong);
+      }
+    });
+
+    // Keep the completion listener for queue management
     _audioPlayer.playerStateStream.listen((state) async {
       if (state.processingState == ProcessingState.completed) {
         try {
-          // Get the next song's metadata before playing
-          final nextSong = _playlist.sequence.length > 1
-              ? _playlist.sequence[1].tag as Map<String, dynamic>
-              : null;
-
           await playNext();
-
-          // Notify UI of song change
-          if (nextSong != null) {
-            _currentSongController.add(nextSong);
-          }
         } catch (e) {
           print('Error during auto-play: $e');
         }
@@ -120,7 +117,8 @@ class MusicService {
       // Create playlist with current song
       final playlist = ConcatenatingAudioSource(children: [
         AudioSource.uri(
-          Uri.parse(currentSong?['mp3_url'] ?? url),
+          Uri.parse(
+              currentSong?['audio_url'] ?? currentSong?['audio_url'] ?? url),
           tag: currentSong ?? {'url': url},
         ),
       ]);
@@ -142,10 +140,10 @@ class MusicService {
       }
 
       // Add next song if available
-      if (nextSong != null && nextSong['mp3_url'] != null) {
+      if (nextSong != null && nextSong['audio_url'] != null) {
         playlist.add(
           AudioSource.uri(
-            Uri.parse(nextSong['mp3_url']),
+            Uri.parse(nextSong['audio_url']),
             tag: nextSong,
           ),
         );
@@ -175,7 +173,7 @@ class MusicService {
                 'title': source.tag['title'] ?? 'Unknown Title',
                 'artist': source.tag['artist'] ?? 'Unknown Artist',
                 'image_url': source.tag['image_url'] ?? '',
-                'mp3_url': source.tag['url'] ?? '',
+                'audio_url': source.tag['url'] ?? '',
               })
           .toList();
 
@@ -210,7 +208,9 @@ class MusicService {
   Future<List<Map<String, dynamic>>> searchSongs(String query,
       {String filter = 'all'}) async {
     try {
-      var request = _supabase.from('songs').select();
+      var request = _supabase
+          .from('songs')
+          .select('id, title, image_url, artist, audio_url');
 
       switch (filter) {
         case 'songs':
@@ -219,15 +219,11 @@ class MusicService {
         case 'artists':
           request = request.ilike('artist', '%$query%');
           break;
-        case 'albums':
-          request = request.ilike('album', '%$query%');
-          break;
         default:
-          request = request.or(
-              'title.ilike.%$query%,artist.ilike.%$query%,album.ilike.%$query%');
+          request = request.or('title.ilike.%$query%,artist.ilike.%$query%');
       }
 
-      final response = await request;
+      final response = await request.limit(20);
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       throw Exception('Failed to search songs: $e');
@@ -254,7 +250,7 @@ class MusicService {
     try {
       // Play the first song
       final firstSong = songs[0];
-      final audioUrl = firstSong['mp3_url'] as String?;
+      final audioUrl = firstSong['audio_url'] as String?;
       if (audioUrl == null || audioUrl.isEmpty) {
         throw Exception('Song URL is missing');
       }
@@ -342,9 +338,9 @@ class MusicService {
     try {
       await _playlist.add(
         AudioSource.uri(
-          Uri.parse(song['mp3_url']),
+          Uri.parse(song['audio_url']),
           tag: {
-            'url': song['mp3_url'],
+            'url': song['audio_url'],
             'title': song['title'],
             'artist': song['artist'],
             'image_url': song['image_url'],
@@ -444,7 +440,7 @@ class MusicService {
 
   Future<void> downloadSong(Map<String, dynamic> song) async {
     // Download song file
-    final bytes = await _downloadFile(song['mp3_url']);
+    final bytes = await _downloadFile(song['audio_url']);
     // Save to local storage
     await _localStorageService.saveSong(song['id'], bytes);
     // Update downloaded songs list

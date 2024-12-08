@@ -283,10 +283,12 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                   currentSong: _localCurrentSong,
                   musicService: widget.musicService,
                   onSongPlay: (song) {
-                    setState(() {
-                      _localCurrentSong = song;
-                    });
-                    widget.onSongPlay(song);
+                    if (song != null) {
+                      setState(() {
+                        _localCurrentSong = song;
+                      });
+                      widget.onSongPlay(song);
+                    }
                   },
                 ),
               ],

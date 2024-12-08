@@ -11,6 +11,7 @@ import 'screens/album_details_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:math' as math;
 import 'screens/artist_details_page.dart';
+import 'widgets/full_screen_player.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -680,7 +681,7 @@ class _HomePageState extends State<HomePage> {
         return GestureDetector(
           onTap: () async {
             try {
-              final audioUrl = song['mp3_url'] as String?;
+              final audioUrl = song['audio_url'] as String?;
               if (audioUrl == null || audioUrl.isEmpty) {
                 throw Exception('Song URL is missing');
               }
@@ -691,10 +692,9 @@ class _HomePageState extends State<HomePage> {
 
               // Get next song from _songs array
               final nextSongIndex = index + 1;
-              final nextSong = nextSongIndex < _songs.length 
-                  ? _songs[nextSongIndex] 
-                  : null;
-              
+              final nextSong =
+                  nextSongIndex < _songs.length ? _songs[nextSongIndex] : null;
+
               await _musicService.playSong(
                 audioUrl,
                 currentSong: song,
