@@ -304,7 +304,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                 'duration': song['duration']?.toString() ?? '0',
               };
 
-              print('Standardized song data: $standardizedSong'); // Add this debug line
+              print(
+                  'Standardized song data: $standardizedSong'); // Add this debug line
 
               // Call onSongPlay with the standardized song data
               widget.onSongPlay(standardizedSong);
@@ -340,7 +341,7 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF121212),
+      color: const Color.fromARGB(255, 20, 25, 34),
       child: Stack(
         children: [
           Column(

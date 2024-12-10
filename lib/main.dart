@@ -141,6 +141,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 20, 25, 34),
+      // backgroundColor: Colors.white10,
       body: SafeArea(
         child: Stack(
           children: [
