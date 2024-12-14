@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'services/music_service.dart';
 import 'widgets/bottom_player.dart';
 import 'config/supabase_config.dart';
@@ -12,23 +13,13 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:math' as math;
 import 'screens/artist_details_page.dart';
 import 'widgets/full_screen_player.dart';
-
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Load environment variables
-  await dotenv.load(fileName: ".env");
-
-  // Initialize Supabase
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
-  );
-
-  runApp(MyApp());
-}
+import 'package:google_fonts/google_fonts.dart';
 
 class MyApp extends StatelessWidget {
+  final User? user;
+
+  const MyApp({Key? key, required this.user}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -36,7 +27,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
-        // scaffoldBackgroundColor: Colors.black,
+        scaffoldBackgroundColor: const Color(0xFF0C0F14),
       ),
       home: HomePage(),
     );
@@ -179,8 +170,13 @@ class _HomePageState extends State<HomePage> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'Good\nmorning Peter✨',
-                                      style: TextStyle(
+                                      'Good morning,\n Peter✨',
+                                      // style: TextStyle(
+                                      //   color: Colors.white,
+                                      //   fontSize: 24,
+                                      //   fontWeight: FontWeight.bold,
+                                      // ),
+                                      style: GoogleFonts.montserrat(
                                         color: Colors.white,
                                         fontSize: 24,
                                         fontWeight: FontWeight.bold,
@@ -224,10 +220,10 @@ class _HomePageState extends State<HomePage> {
                                 // Quick Play section
                                 Text(
                                   'Quick Play',
-                                  style: TextStyle(
+                                  style: GoogleFonts.montserrat(
                                     color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.normal,
                                   ),
                                 ),
                                 SizedBox(height: 16),
@@ -240,10 +236,10 @@ class _HomePageState extends State<HomePage> {
                                 // Just the Hits section
                                 Text(
                                   'Just the Hits',
-                                  style: TextStyle(
+                                  style: GoogleFonts.montserrat(
                                     color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.normal,
                                   ),
                                 ),
                                 SizedBox(height: 16),
@@ -287,10 +283,10 @@ class _HomePageState extends State<HomePage> {
                                 // Recommended Artists section
                                 Text(
                                   'Recommended Artists',
-                                  style: TextStyle(
+                                  style: GoogleFonts.montserrat(
                                     color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.normal,
                                   ),
                                 ),
                                 SizedBox(height: 16),
@@ -457,17 +453,15 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
+                  style: GoogleFonts.lato(
                     color: Colors.white,
-                    fontWeight: FontWeight.bold,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   artist,
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
+                  style: GoogleFonts.lato(
+                    color: Colors.white,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -715,6 +709,7 @@ class _HomePageState extends State<HomePage> {
             song['title'] ?? 'Unknown Title',
             song['artist'] ?? 'Unknown Artist',
             song['image_url'] ?? '',
+            // textStyle: GoogleFonts.lato(),
           ),
         );
       },

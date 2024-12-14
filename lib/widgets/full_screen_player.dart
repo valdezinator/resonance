@@ -32,7 +32,7 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
   void initState() {
     super.initState();
     _loadImagePalette();
-    
+
     // Listen for song changes
     widget.musicService.currentSongStream.listen((newSong) {
       if (mounted && newSong != null && newSong != widget.currentSong) {
@@ -126,7 +126,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                 initialChildSize: 0.6,
                                 minChildSize: 0.4,
                                 maxChildSize: 0.8,
-                                builder: (context, scrollController) => Container(
+                                builder: (context, scrollController) =>
+                                    Container(
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF1A202B),
                                     borderRadius: const BorderRadius.vertical(
@@ -142,13 +143,15 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                         height: 4,
                                         decoration: BoxDecoration(
                                           color: Colors.grey[600],
-                                          borderRadius: BorderRadius.circular(2),
+                                          borderRadius:
+                                              BorderRadius.circular(2),
                                         ),
                                       ),
                                       Padding(
                                         padding: const EdgeInsets.all(16.0),
                                         child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
                                           children: [
                                             Text(
                                               'Queue',
@@ -159,8 +162,10 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                               ),
                                             ),
                                             IconButton(
-                                              icon: Icon(Icons.clear_all, color: textColor),
-                                              onPressed: widget.musicService.clearQueue,
+                                              icon: Icon(Icons.clear_all,
+                                                  color: textColor),
+                                              onPressed: widget
+                                                  .musicService.clearQueue,
                                             ),
                                           ],
                                         ),
@@ -169,7 +174,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                       Expanded(
                                         child: StreamBuilder<
                                             List<Map<String, dynamic>>>(
-                                          stream: widget.musicService.queueStream,
+                                          stream:
+                                              widget.musicService.queueStream,
                                           builder: (context, snapshot) {
                                             if (!snapshot.hasData) {
                                               return const Center(
@@ -182,7 +188,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                             return ReorderableListView.builder(
                                               itemCount: queue.length,
                                               onReorder: (oldIndex, newIndex) {
-                                                widget.musicService.reorderQueue(
+                                                widget.musicService
+                                                    .reorderQueue(
                                                   oldIndex,
                                                   newIndex > oldIndex
                                                       ? newIndex - 1
@@ -195,7 +202,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                                   key: ValueKey(song['id']),
                                                   leading: ClipRRect(
                                                     borderRadius:
-                                                        BorderRadius.circular(4),
+                                                        BorderRadius.circular(
+                                                            4),
                                                     child: Image.network(
                                                       song['image_url'],
                                                       width: 40,
@@ -211,7 +219,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                                   subtitle: Text(
                                                     song['artist'],
                                                     style: TextStyle(
-                                                        color: Colors.grey[400]),
+                                                        color:
+                                                            Colors.grey[400]),
                                                   ),
                                                   trailing:
                                                       ReorderableDragStartListener(
@@ -305,11 +314,13 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                           onSeek: (duration) {
                             widget.musicService.seek(duration);
                           },
-                          baseBarColor:
-                              const Color(0xFF0C0F14).withOpacity(0.2),
-                          progressBarColor: const Color(0xFF0C0F14),
+                          baseBarColor: const Color.fromARGB(255, 23, 80, 42)
+                              .withOpacity(0.2),
+                          progressBarColor:
+                              const Color.fromARGB(255, 21, 112, 44),
                           bufferedBarColor:
-                              const Color(0xFF0C0F14).withOpacity(0.3),
+                              const Color.fromARGB(255, 107, 119, 139)
+                                  .withOpacity(0.3),
                           thumbColor: textColor,
                           timeLabelTextStyle: TextStyle(color: textColor),
                         );
