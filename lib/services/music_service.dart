@@ -165,6 +165,89 @@ class MusicService {
     }
   }
 
+
+  //
+  Future<void> addTopHit(String songId, String artistId, int rank) async {
+    try {
+      await _supabase.from('top_hits').insert({
+        'song_id': songId,
+        'artist_id': artistId,
+        'rank': rank,
+        'play_count': 0,
+      });
+    } catch (e) {
+      print('Error adding top hit: $e');
+      throw Exception('Failed to add top hit: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getArtistTopHits(String artistId) async {
+    try {
+      final response = await _supabase
+          .from('top_hits')
+          .select('''
+            rank,
+            play_count,
+            songs (
+              id,
+              title,
+              duration,
+              audio_url,
+              image_url
+            ),
+            artists (
+              id,
+              name
+            )
+          ''')
+          .eq('artist_id', artistId)
+          .order('rank', ascending: true);
+
+      // Transform the response to flatten the structure
+      return List<Map<String, dynamic>>.from(response).map((hit) {
+        final song = hit['songs'] as Map<String, dynamic>;
+        final artist = hit['artists'] as Map<String, dynamic>;
+        return {
+          ...song,
+          'rank': hit['rank'],
+          'play_count': hit['play_count'],
+          'artist_name': artist['name'],
+          'artist_id': artist['id'],
+        };
+      }).toList();
+    } catch (e) {
+      print('Error fetching top hits: $e');
+      throw Exception('Failed to fetch top hits: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> getArtistDetails(String artistId) async {
+    try {
+      final response = await _supabase
+          .from('artists')
+          .select()
+          .eq('id', artistId)
+          .single();
+
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      print('Error fetching artist details: $e');
+      throw Exception('Failed to fetch artist details: $e');
+    }
+  }
+
+  // Method to increment play count for a top hit
+  Future<void> incrementTopHitPlayCount(String songId, String artistId) async {
+    try {
+      await _supabase.rpc('increment_top_hit_play_count', params: {
+        'song_id': songId,
+        'artist_id': artistId,
+      });
+    } catch (e) {
+      print('Error incrementing play count: $e');
+    }
+  }
+
   void _updateQueueStream() {
     try {
       final currentQueue = _playlist.sequence
