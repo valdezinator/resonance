@@ -73,7 +73,6 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
 
   @override
   Widget build(BuildContext context) {
-    
 
     return Scaffold(
       backgroundColor: const Color(0xFF0C0F14),
@@ -442,7 +441,7 @@ class _SongListView extends StatelessWidget {
 
                 // Update local state first
                 onLocalSongUpdate(songData);
-                
+
                 // Then update parent state
                 onSongPlay(songData);
 

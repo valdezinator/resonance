@@ -165,7 +165,6 @@ class MusicService {
     }
   }
 
-
   //
   Future<void> addTopHit(String songId, String artistId, int rank) async {
     try {
@@ -181,53 +180,100 @@ class MusicService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getArtistTopHits(String artistId) async {
+  Future<List<Map<String, dynamic>>> getArtistTopHits(dynamic artistId) async {
     try {
-      final response = await _supabase
-          .from('top_hits')
-          .select('''
-            rank,
-            play_count,
-            songs (
-              id,
-              title,
-              duration,
-              audio_url,
-              image_url
-            ),
-            artists (
-              id,
-              name
-            )
-          ''')
-          .eq('artist_id', artistId)
-          .order('rank', ascending: true);
+      print('========= DEBUG LOGS =========');
+      print('Artist ID received: $artistId');
+      print('Artist ID type: ${artistId.runtimeType}');
 
-      // Transform the response to flatten the structure
-      return List<Map<String, dynamic>>.from(response).map((hit) {
-        final song = hit['songs'] as Map<String, dynamic>;
-        final artist = hit['artists'] as Map<String, dynamic>;
+      // Get the full artist data from recommended_artists
+      final recommendedArtistData = await _supabase
+          .from('recommended_artists')
+          .select('*') // Select all columns to see what we have
+          .eq('id', artistId)
+          .maybeSingle();
+
+      print('Full recommended artist data: $recommendedArtistData');
+
+      // Safety check
+      if (recommendedArtistData == null) {
+        print('No artist data found');
+        return [];
+      }
+
+      // Safely get the artist name
+      final artistName = recommendedArtistData['artist'];
+      print('Artist name extracted: $artistName');
+
+      if (artistName == null) {
+        print('Artist name is null');
+        return [];
+      }
+
+      // Get songs
+      final songResponse = await _supabase.from('songs').select('''
+          id,
+          title,
+          artist,
+          duration,
+          audio_url,
+          image_url
+        ''').eq('artist', artistName).limit(10);
+
+      print('Songs response: $songResponse');
+
+      if (songResponse == null) {
+        print('Song response is null');
+        return [];
+      }
+
+      final transformedSongs =
+          List<Map<String, dynamic>>.from(songResponse).map((song) {
         return {
           ...song,
-          'rank': hit['rank'],
-          'play_count': hit['play_count'],
-          'artist_name': artist['name'],
-          'artist_id': artist['id'],
+          'rank': 0,
+          'play_count': 0,
         };
       }).toList();
+
+      print('Transformed songs count: ${transformedSongs.length}');
+      print('========= END DEBUG LOGS =========');
+      return transformedSongs;
     } catch (e) {
-      print('Error fetching top hits: $e');
-      throw Exception('Failed to fetch top hits: $e');
+      print('Error in getArtistTopHits: $e');
+      print('Error stack trace: ${StackTrace.current}');
+      return []; // Return empty list instead of throwing
+    }
+  }
+
+// Add this method for incrementing play count
+  Future<void> incrementTopHitPlayCount(String songId, String artistId) async {
+    try {
+      // First, find the top_hit record
+      final response = await _supabase
+          .from('top_hits')
+          .select()
+          .eq('song_id', songId)
+          .eq('artist_id', artistId)
+          .single();
+
+      if (response != null) {
+        // Update the play count
+        await _supabase
+            .from('top_hits')
+            .update({'play_count': (response['play_count'] ?? 0) + 1})
+            .eq('song_id', songId)
+            .eq('artist_id', artistId);
+      }
+    } catch (e) {
+      print('Error incrementing play count: $e');
     }
   }
 
   Future<Map<String, dynamic>> getArtistDetails(String artistId) async {
     try {
-      final response = await _supabase
-          .from('artists')
-          .select()
-          .eq('id', artistId)
-          .single();
+      final response =
+          await _supabase.from('artists').select().eq('id', artistId).single();
 
       return response as Map<String, dynamic>;
     } catch (e) {
@@ -237,16 +283,16 @@ class MusicService {
   }
 
   // Method to increment play count for a top hit
-  Future<void> incrementTopHitPlayCount(String songId, String artistId) async {
-    try {
-      await _supabase.rpc('increment_top_hit_play_count', params: {
-        'song_id': songId,
-        'artist_id': artistId,
-      });
-    } catch (e) {
-      print('Error incrementing play count: $e');
-    }
-  }
+  // Future<void> incrementTopHitPlayCount(String songId, String artistId) async {
+  //   try {
+  //     await _supabase.rpc('increment_top_hit_play_count', params: {
+  //       'song_id': songId,
+  //       'artist_id': artistId,
+  //     });
+  //   } catch (e) {
+  //     print('Error incrementing play count: $e');
+  //   }
+  // }
 
   void _updateQueueStream() {
     try {
