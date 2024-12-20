@@ -25,51 +25,52 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
   List<Map<String, dynamic>> _searchResults = [];
   bool _isLoading = false;
   bool _isPlayerVisible = false;
-  double _dragStart = 0;
 
-  // Update recent picks data with network images and error handling
-  final List<Map<String, dynamic>> _recentPicks = [
+  // Browse categories with color gradients
+  final List<Map<String, dynamic>> _browseCategories = [
     {
-      'id': '1',
-      'title': 'Hot Hits USA',
-      'description': 'The hottest tracks in the United States',
-      'image_url':
-          'https://i.scdn.co/image/ab67706f00000003e8e28219724c2423afa4d320',
+      'title': 'Podcasts',
+      'color1': const Color(0xFF8C67AC),
+      'color2': const Color(0xFF9B59B6),
     },
     {
-      'id': '2',
-      'title': 'Hot Hits USA',
-      'description': 'The hottest tracks in the United States',
-      'image_url':
-          'https://i.scdn.co/image/ab67706f00000003e8e28219724c2423afa4d320',
+      'title': 'Live Events',
+      'color1': const Color(0xFFE67E22),
+      'color2': const Color(0xFFD35400),
+    },
+    {
+      'title': 'Made For You',
+      'color1': const Color(0xFF1DB954),
+      'color2': const Color(0xFF1ED760),
+    },
+    {
+      'title': 'New Releases',
+      'color1': const Color(0xFFE91E63),
+      'color2': const Color(0xFFC2185B),
+    },
+    {
+      'title': 'Hindi',
+      'color1': const Color(0xFF3498DB),
+      'color2': const Color(0xFF2980B9),
+    },
+    {
+      'title': 'Punjabi',
+      'color1': const Color(0xFFE74C3C),
+      'color2': const Color(0xFFC0392B),
     },
   ];
 
-  // Update recent searches with network images
-  final List<Map<String, dynamic>> _recentSearches = [
+  // Top genres with updated structure
+  final List<Map<String, dynamic>> _topGenres = [
     {
-      'title': 'Lalkara',
-      'subtitle': 'Diljit Dosanjh',
-      'image_url':
-          'https://i.scdn.co/image/ab67616d0000b273c0e9d94656fcf62d607be8a5'
+      'title': 'Pop',
+      'image_url': 'https://i.scdn.co/image/ab67706f00000003e8e28219724c2423afa4d320',
+      'description': 'Popular hits you\'ll love',
     },
     {
-      'title': 'Ni Kude',
-      'subtitle': 'Ammy Virk',
-      'image_url':
-          'https://i.scdn.co/image/ab67616d0000b273d6e0e68c46db4524f7ba9bed'
-    },
-    {
-      'title': 'Dupatta',
-      'subtitle': 'Loot',
-      'image_url':
-          'https://i.scdn.co/image/ab67616d0000b273a45b5b5f1d78d5e9104c4e74'
-    },
-    {
-      'title': 'Just Friend',
-      'subtitle': 'Mr. Dass',
-      'image_url':
-          'https://i.scdn.co/image/ab67616d0000b273e6f407c7f3a0ec98845e4431'
+      'title': 'Hip-Hop',
+      'image_url': 'https://i.scdn.co/image/ab67706f00000003e8e28219724c2423afa4d320',
+      'description': 'Latest hip-hop tracks',
     },
   ];
 
@@ -108,59 +109,138 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
 
   Widget _buildSearchBar() {
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF282828),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: TextField(
         controller: _searchController,
-        style: TextStyle(color: Colors.white),
+        style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
-          hintText: 'Search for anything',
+          hintText: 'What do you want to listen to?',
           hintStyle: TextStyle(color: Colors.grey[400]),
           prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
+          suffixIcon: Icon(Icons.mic, color: Colors.grey[400]),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
         onChanged: _performSearch,
       ),
     );
   }
 
-  Widget _buildRecentPicks() {
+  Widget _buildBrowseCategories() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: EdgeInsets.only(left: 16, top: 16, bottom: 12),
+        const Padding(
+          padding: EdgeInsets.only(left: 16, top: 24, bottom: 16),
           child: Text(
-            'Your recent picks',
+            'Browse all',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 1.5,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemCount: _browseCategories.length,
+          itemBuilder: (context, index) {
+            final category = _browseCategories[index];
+            return Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    category['color1'],
+                    category['color2'],
+                  ],
+                ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: 12,
+                    top: 12,
+                    child: Text(
+                      category['title'],
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: -15,
+                    bottom: -15,
+                    child: Transform.rotate(
+                      angle: 0.3,
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          color: Colors.black26,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopGenres() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 16, top: 24, bottom: 16),
+          child: Text(
+            'Your top genres',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ),
         SizedBox(
-          height: 160,
+          height: 200,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            itemCount: _recentPicks.length,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: _topGenres.length,
             itemBuilder: (context, index) {
-              final pick = _recentPicks[index];
+              final genre = _topGenres[index];
               return Container(
                 width: 160,
-                margin: EdgeInsets.symmetric(horizontal: 4),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(8),
                       child: Image.network(
-                        pick['image_url'] ?? '',
+                        genre['image_url'],
                         height: 160,
                         width: 160,
                         fit: BoxFit.cover,
@@ -168,8 +248,24 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                           height: 160,
                           width: 160,
                           color: Colors.grey[800],
-                          child: Icon(Icons.music_note, color: Colors.white),
+                          child: const Icon(Icons.music_note, color: Colors.white),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      genre['title'],
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      genre['description'],
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -182,64 +278,30 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
     );
   }
 
-  Widget _buildRecentSearches() {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      itemCount: _recentSearches.length,
-      itemBuilder: (context, index) {
-        final search = _recentSearches[index];
-        return ListTile(
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Image.network(
-              search['image_url'] ?? '',
-              width: 40,
-              height: 40,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                width: 40,
-                height: 40,
-                color: Colors.grey[800],
-                child: Icon(Icons.music_note, color: Colors.white, size: 20),
-              ),
-            ),
-          ),
-          title: Text(
-            search['title'] ?? '',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: Text(
-            search['subtitle'] ?? '',
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 12,
-            ),
-          ),
-          trailing: Icon(Icons.close, color: Colors.grey[400], size: 20),
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        );
-      },
-    );
-  }
-
   Widget _buildSearchResults() {
     if (_isLoading) {
-      return Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+        ),
+      );
     }
 
-    if (_searchResults.isEmpty) {
+    if (_searchResults.isEmpty && _searchController.text.isNotEmpty) {
       return Center(
-        child: Text(
-          'No results found',
-          style: TextStyle(
-            color: Colors.grey[400],
-            fontSize: 16,
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 48, color: Colors.grey[600]),
+            const SizedBox(height: 16),
+            Text(
+              'No results found for "${_searchController.text}"',
+              style: TextStyle(
+                color: Colors.grey[400],
+                fontSize: 16,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -252,24 +314,27 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
       itemBuilder: (context, index) {
         final song = _searchResults[index];
         return ListTile(
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Image.network(
-              song['image_url'] ?? '',
-              width: 48,
-              height: 48,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
+          leading: Hero(
+            tag: 'song-image-${song['id']}',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Image.network(
+                song['image_url'] ?? '',
                 width: 48,
                 height: 48,
-                color: Colors.grey[800],
-                child: Icon(Icons.music_note, color: Colors.white, size: 24),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 48,
+                  height: 48,
+                  color: Colors.grey[800],
+                  child: const Icon(Icons.music_note, color: Colors.white, size: 24),
+                ),
               ),
             ),
           ),
           title: Text(
             song['title'] ?? '',
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
               fontWeight: FontWeight.w500,
@@ -282,18 +347,19 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
               fontSize: 14,
             ),
           ),
+          trailing: IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.grey),
+            onPressed: () {
+              // Show options menu
+            },
+          ),
           onTap: () async {
             try {
-              // Debug the song data
-              print('Song data: $song');
-
-              // Get the audio URL and verify it exists
               final audioUrl = song['audio_url'];
               if (audioUrl == null || audioUrl.toString().isEmpty) {
                 throw Exception('Song URL is missing');
               }
 
-              // Create a standardized song object with default values
               final standardizedSong = {
                 ...song,
                 'url': audioUrl,
@@ -304,13 +370,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                 'duration': song['duration']?.toString() ?? '0',
               };
 
-              print(
-                  'Standardized song data: $standardizedSong'); // Add this debug line
-
-              // Call onSongPlay with the standardized song data
               widget.onSongPlay(standardizedSong);
 
-              // Get next song from search results
               final nextSongIndex = index + 1;
               final nextSong = nextSongIndex < _searchResults.length
                   ? _searchResults[nextSongIndex]
@@ -322,7 +383,6 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                 nextSong: nextSong,
               );
             } catch (e) {
-              print('Error playing song: $e');
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -341,12 +401,11 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color.fromARGB(255, 20, 25, 34),
+      color: const Color(0xFF121212),
       child: Stack(
         children: [
           Column(
             children: [
-              // Add safe area padding and move search bar to top
               SafeArea(
                 child: _buildSearchBar(),
               ),
@@ -356,9 +415,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildRecentPicks(),
-                            SizedBox(height: 24),
-                            _buildRecentSearches(),
+                            _buildBrowseCategories(),
+                            _buildTopGenres(),
                           ],
                         ),
                       )
