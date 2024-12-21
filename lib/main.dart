@@ -16,6 +16,8 @@ import 'widgets/full_screen_player.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/audio_handler.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 class MyApp extends StatelessWidget {
   final User? user;
@@ -67,12 +69,21 @@ class _HomePageState extends State<HomePage> {
     _personalizedPlaylistsFuture = _musicService.getPersonalizedPlaylists();
     _topChartsFuture = _musicService.getTopCharts();
     // Start the audio service with your background task entry point
-    AudioService.start(
-      backgroundTaskEntrypoint: _myEntrypoint,
-      androidNotificationIcon:
-          'mipmap/ic_launcher', // Set your notification icon here
-    );
+    // AudioService.start(
+    //   backgroundTaskEntrypoint: _myEntrypoint,
+    //   androidNotificationIcon:
+    //       'mipmap/ic_launcher', // Set your notification icon here
+    // );
   }
+
+  Future<void> main() async {
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
+    androidNotificationChannelName: 'Audio playback',
+    androidNotificationOngoing: true,
+  );
+  runApp(HomePage());
+}
 
   Future<void> _loadMoreSongs() async {
     if (_isLoadingMore || !_hasMore) return;
@@ -415,7 +426,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _myEntrypoint() => AudioServiceBackground.run(() => MyBackgroundTask());
+  // void _myEntrypoint() => AudioServiceBackground.run(() => MyBackgroundTask());
 
   @override
   void dispose() {

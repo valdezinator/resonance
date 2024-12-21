@@ -9,6 +9,7 @@ import 'config/supabase_config.dart';
 import 'main.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+
 Future<void> main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
