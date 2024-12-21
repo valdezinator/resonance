@@ -14,6 +14,8 @@ import 'dart:math' as math;
 import 'screens/artist_details_page.dart';
 import 'widgets/full_screen_player.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'services/audio_handler.dart';
+import 'package:audio_service/audio_service.dart';
 
 class MyApp extends StatelessWidget {
   final User? user;
@@ -64,6 +66,12 @@ class _HomePageState extends State<HomePage> {
     _recentlyPlayedFuture = _musicService.getRecentlyPlayed();
     _personalizedPlaylistsFuture = _musicService.getPersonalizedPlaylists();
     _topChartsFuture = _musicService.getTopCharts();
+    // Start the audio service with your background task entry point
+    AudioService.start(
+      backgroundTaskEntrypoint: _myEntrypoint,
+      androidNotificationIcon:
+          'mipmap/ic_launcher', // Set your notification icon here
+    );
   }
 
   Future<void> _loadMoreSongs() async {
@@ -406,6 +414,8 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
+  void _myEntrypoint() => AudioServiceBackground.run(() => MyBackgroundTask());
 
   @override
   void dispose() {
