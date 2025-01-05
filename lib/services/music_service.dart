@@ -515,21 +515,56 @@ class MusicService {
   }
 
   Future<void> likeSong(String songId) async {
-    await _supabase.from('liked_songs').insert({
-      'user_id': _supabase.auth.currentUser?.id,
-      'song_id': songId,
-      'liked_at': DateTime.now().toIso8601String(),
-    });
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) throw Exception('User not authenticated');
+
+      // Check if song is already liked
+      final existingLike = await _supabase
+          .from('liked_songs')
+          .select()
+          .eq('user_id', userId)
+          .eq('song_id', songId)
+          .maybeSingle();
+
+      if (existingLike != null) {
+        // Unlike the song
+        await _supabase
+            .from('liked_songs')
+            .delete()
+            .eq('user_id', userId)
+            .eq('song_id', songId);
+      } else {
+        // Like the song
+        await _supabase.from('liked_songs').insert({
+          'user_id': userId,
+          'song_id': songId,
+          'liked_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (e) {
+      print('Error managing song like: $e');
+      rethrow;
+    }
   }
 
   Future<bool> isLiked(String songId) async {
-    final response = await _supabase
-        .from('liked_songs')
-        .select()
-        .eq('user_id', _supabase.auth.currentUser!.id)
-        .eq('song_id', songId)
-        .single();
-    return response != null;
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return false;
+
+      final response = await _supabase
+          .from('liked_songs')
+          .select()
+          .eq('user_id', userId)
+          .eq('song_id', songId)
+          .maybeSingle();
+      
+      return response != null;
+    } catch (e) {
+      print('Error checking if song is liked: $e');
+      return false;
+    }
   }
 
   Future<void> toggleShuffle() async {

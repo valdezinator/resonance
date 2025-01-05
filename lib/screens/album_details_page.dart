@@ -29,11 +29,46 @@ class AlbumDetailsPage extends StatefulWidget {
 
 class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayerMixin {
   Map<String, dynamic>? _localCurrentSong;
+  bool _isSearching = false;
+  String _searchQuery = '';
+  List<Map<String, dynamic>> _allSongs = [];
+  List<Map<String, dynamic>> _filteredSongs = [];
+  final TextEditingController _searchController = TextEditingController();
+  late Future<List<Map<String, dynamic>>> _songsFuture;
 
   @override
   void initState() {
     super.initState();
     _localCurrentSong = widget.currentSong;
+    _songsFuture = widget.musicService.getAlbumSongs(widget.album['id']);
+    _loadSongs();
+  }
+
+  Future<void> _loadSongs() async {
+    try {
+      final songs = await _songsFuture;
+      setState(() {
+        _allSongs = songs;
+        _filteredSongs = songs;
+      });
+    } catch (e) {
+      print('Error loading songs: $e');
+    }
+  }
+
+  void _filterSongs(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredSongs = _allSongs;
+      } else {
+        _filteredSongs = _allSongs
+            .where((song) =>
+                song['title'].toString().toLowerCase().contains(query.toLowerCase()) ||
+                song['artist'].toString().toLowerCase().contains(query.toLowerCase()))
+            .toList();
+      }
+    });
   }
 
   @override
@@ -46,18 +81,6 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
     }
   }
 
-  // Future<void> _loadImagePalette() async {
-  //   try {
-  //     final imageProvider = NetworkImage(widget.album['image_url']);
-  //     final palette = await PaletteGenerator.fromImageProvider(imageProvider);
-  //     setState(() {
-  //       _palette = palette;
-  //     });
-  //   } catch (e) {
-  //     print('Error loading palette: $e');
-  //   }
-  // }
-
   String _formatDuration(dynamic duration) {
     if (duration == null) return '0:00';
 
@@ -69,6 +92,12 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
     } catch (e) {
       return duration.toString(); // Return the original value if parsing fails
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -93,13 +122,13 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
             // ),
           ),
           FutureBuilder<List<Map<String, dynamic>>>(
-            future: widget.musicService.getAlbumSongs(widget.album['id']),
+            future: _songsFuture,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.connectionState == ConnectionState.waiting && _allSongs.isEmpty) {
                 return Center(child: CircularProgressIndicator());
               }
 
-              if (snapshot.hasError) {
+              if (snapshot.hasError && _allSongs.isEmpty) {
                 return Center(
                   child: Text(
                     'Error loading songs: ${snapshot.error}',
@@ -107,8 +136,6 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                   ),
                 );
               }
-
-              final songs = snapshot.data ?? [];
 
               return CustomScrollView(
                 slivers: [
@@ -124,6 +151,38 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                       ),
                       onPressed: () => Navigator.pop(context),
                     ),
+                    actions: [
+                      IconButton(
+                        icon: Icon(
+                          _isSearching ? Icons.close : Icons.search,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            if (_isSearching) {
+                              _isSearching = false;
+                              _searchController.clear();
+                              _filterSongs('');
+                            } else {
+                              _isSearching = true;
+                            }
+                          });
+                        },
+                      ),
+                    ],
+                    title: _isSearching
+                        ? TextField(
+                            controller: _searchController,
+                            autofocus: true,
+                            style: TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Search songs...',
+                              hintStyle: TextStyle(color: Colors.grey),
+                              border: InputBorder.none,
+                            ),
+                            onChanged: _filterSongs,
+                          )
+                        : null,
                   ),
                   SliverToBoxAdapter(
                     child: Padding(
@@ -260,7 +319,7 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                     ),
                   ),
                   _SongListView(
-                    songs: songs,
+                    songs: _filteredSongs, // Use filtered songs instead of all songs
                     album: widget.album,
                     musicService: widget.musicService,
                     onSongPlay: widget.onSongPlay,

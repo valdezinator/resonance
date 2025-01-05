@@ -23,6 +23,7 @@ class BottomPlayer extends StatefulWidget {
 
 class _BottomPlayerState extends State<BottomPlayer> {
   bool isPlaying = false;
+  bool isLiked = false;
 
   @override
   void didUpdateWidget(BottomPlayer oldWidget) {
@@ -30,6 +31,7 @@ class _BottomPlayerState extends State<BottomPlayer> {
     // Check if the current song has changed
     if (widget.currentSong?['id'] != oldWidget.currentSong?['id']) {
       setState(() {});
+      _checkLikeStatus();
     }
   }
 
@@ -64,6 +66,7 @@ class _BottomPlayerState extends State<BottomPlayer> {
   @override
   void initState() {
     super.initState();
+    _checkLikeStatus();
     // Initialize player state based on musicService
     widget.musicService.playerStateStream.listen((state) {
       if (mounted) {
@@ -72,6 +75,37 @@ class _BottomPlayerState extends State<BottomPlayer> {
         });
       }
     });
+  }
+
+  Future<void> _checkLikeStatus() async {
+    if (widget.currentSong != null) {
+      final liked = await widget.musicService.isLiked(widget.currentSong!['id']);
+      if (mounted) {
+        setState(() {
+          isLiked = liked;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    try {
+      if (widget.currentSong == null) return;
+      
+      await widget.musicService.likeSong(widget.currentSong!['id']);
+      await _checkLikeStatus(); // Refresh like status after toggle
+    } catch (e) {
+      print('Error toggling like: $e');
+      // Show error message to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update like status: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -90,7 +124,8 @@ class _BottomPlayerState extends State<BottomPlayer> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+              // Blur portion of the bottom player
+              filter: ImageFilter.blur(sigmaX: 0.0, sigmaY: 0.0),
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 height: 60,
@@ -181,19 +216,12 @@ class _BottomPlayerState extends State<BottomPlayer> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.skip_previous),
+                                  icon: Icon(
+                                    isLiked ? Icons.favorite : Icons.favorite_border,
+                                    color: isLiked ? Colors.green : Colors.white,  // Changed from red to green
+                                  ),
                                   iconSize: 24,
-                                  color: Colors.white,
-                                  onPressed: () async {
-                                    // Implement skip to previous logic
-                                    if (await widget.musicService.position > Duration(seconds: 3)) {
-                                      // If more than 3 seconds in, restart song
-                                      widget.musicService.seek(Duration.zero);
-                                    } else {
-                                      // Otherwise go to previous song
-                                      widget.musicService.playPrevious();
-                                    }
-                                  },
+                                  onPressed: _toggleLike,
                                 ),
                                 StreamBuilder<PlayerState>(
                                   stream: widget.musicService.playerStateStream,
