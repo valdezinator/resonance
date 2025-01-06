@@ -76,55 +76,71 @@ class _SignInPageState extends State<SignInPage> {
         _isSigningIn = true;
       });
 
+      // Configure Google Sign In
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
         throw Exception('Sign in cancelled by user');
       }
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      // Get Google auth credentials
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      
+      // Sign in with Firebase
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final User? firebaseUser = userCredential.user;
 
-      final UserCredential userCredential =
-          await _auth.signInWithCredential(credential);
-      final User? user = userCredential.user;
-
-      if (user != null) {
-        // Register or update user in Supabase
-        final supabase.SupabaseClient supabaseClient =
-            supabase.Supabase.instance.client;
+      if (firebaseUser != null) {
         try {
-          await supabaseClient.from('users').upsert({
-            'id': user.uid,
-            'email': user.email,
-            'display_name': user.displayName,
-            'photo_url': user.photoURL,
-            'last_sign_in': DateTime.now().toIso8601String(),
-          });
-        } catch (e) {
-          print('Error updating Supabase user: $e');
-          // Continue anyway as Firebase auth was successful
-        }
+          // Get Supabase client
+          final supabaseClient = supabase.Supabase.instance.client;
 
-        // Navigate to main page after successful sign in
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => MyApp(user: user),
-            ),
+          // Sign in with Supabase using the Google token
+          final supabaseAuthResponse = await supabaseClient.auth.signInWithOAuth(
+            supabase.OAuthProvider.google,
+            authScreenLaunchMode: supabase.LaunchMode.inAppWebView,
+            // Configure in-app authentication
+            queryParams: {
+              'access_token': googleAuth.accessToken!,
+              'id_token': googleAuth.idToken!,
+            },
           );
+
+          if (supabaseAuthResponse != null) {
+            // Successfully authenticated with both Firebase and Supabase
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => MyApp(user: firebaseUser),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          print('Detailed Supabase error: $e');
+          // Continue with Firebase auth even if Supabase fails
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => MyApp(user: firebaseUser),
+              ),
+            );
+          }
         }
       }
 
-      return user;
+      return firebaseUser;
     } catch (e) {
       print('Error during Google sign in: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sign in error: $e')),
+          SnackBar(
+            content: Text('Sign in error: ${e.toString()}'),
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
       rethrow;
