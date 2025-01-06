@@ -224,7 +224,7 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
           ),
         ),
         SizedBox(
-          height: 200,
+          height: 220,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -404,25 +404,28 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
       color: const Color(0xFF121212),
       child: Stack(
         children: [
-          Column(
-            children: [
-              SafeArea(
-                child: _buildSearchBar(),
-              ),
-              Expanded(
-                child: _searchController.text.isEmpty
-                    ? SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildBrowseCategories(),
-                            _buildTopGenres(),
-                          ],
-                        ),
-                      )
-                    : _buildSearchResults(),
-              ),
-            ],
+          SafeArea(
+            child: Column(
+              children: [
+                _buildSearchBar(),
+                Expanded(
+                  child: _searchController.text.isEmpty
+                      ? SingleChildScrollView(
+                          padding: EdgeInsets.only(
+                            bottom: MediaQuery.of(context).padding.bottom + 80,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildBrowseCategories(),
+                              _buildTopGenres(),
+                            ],
+                          ),
+                        )
+                      : _buildSearchResults(),
+                ),
+              ],
+            ),
           ),
           if (_isPlayerVisible)
             buildFloatingBottomPlayer(

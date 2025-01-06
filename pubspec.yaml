@@ -1,4 +1,4 @@
-name: Resonance
+name: resonance
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -32,11 +32,13 @@ dependencies:
   audio_video_progress_bar: ^2.0.1
   cached_network_image: ^3.3.0
   cupertino_icons: ^1.0.8
+  encrypt: ^5.0.3
   firebase_auth: ^5.3.4
   firebase_core: ^3.8.1
   flutter:
     sdk: flutter
   flutter_dotenv: ^5.1.0
+  flutter_secure_storage: ^9.0.0
   flutter_svg: ^2.0.9
   google_fonts: ^6.2.1
   google_sign_in: ^6.2.2
@@ -44,6 +46,7 @@ dependencies:
   just_audio: ^0.9.36
   just_audio_background: ^0.0.1-beta.11
   palette_generator: ^0.3.3+5
+  path_provider: ^2.1.5
   shared_preferences: ^2.3.3
   supabase_flutter: ^2.8.1
 

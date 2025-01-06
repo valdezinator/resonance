@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'local_storage_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
+import 'encrypted_storage_service.dart';
 
 class MusicService {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -15,10 +16,10 @@ class MusicService {
       StreamController<List<Map<String, dynamic>>>.broadcast();
   final _currentSongController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final EncryptedStorageService _encryptedStorage = EncryptedStorageService();
 
   MusicService() {
     _playlist = ConcatenatingAudioSource(children: []);
-    _initAudioPlayer();
   }
 
   Future<void> _initAudioPlayer() async {
@@ -44,6 +45,11 @@ class MusicService {
         }
       }
     });
+  }
+
+  Future<void> init() async {
+    await _encryptedStorage.init();
+    await _initAudioPlayer();
   }
 
   Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
@@ -159,6 +165,11 @@ class MusicService {
       _playlist = playlist;
       await _audioPlayer.play();
       _updateQueueStream();
+
+      // Record play history after successfully starting playback
+      if (currentSong != null) {
+        await _recordPlayHistory(currentSong);
+      }
     } catch (e) {
       print('Error playing song: $e');
       rethrow;
@@ -391,9 +402,22 @@ class MusicService {
 
   Future<List<Map<String, dynamic>>> getRecentlyPlayed() async {
     try {
-      final response = await Supabase.instance.client
-          .from('recently_played')
-          .select('*, songs(*)')
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return [];
+
+      final response = await _supabase
+          .from('listening_history')
+          .select('''
+            *,
+            songs:song_id (
+              id,
+              title,
+              artist,
+              image_url,
+              audio_url
+            )
+          ''')
+          .eq('user_id', userId)
           .order('played_at', ascending: false)
           .limit(10);
 
@@ -603,12 +627,59 @@ class MusicService {
   }
 
   Future<void> downloadSong(Map<String, dynamic> song) async {
-    // Download song file
-    final bytes = await _downloadFile(song['audio_url']);
-    // Save to local storage
-    await _localStorageService.saveSong(song['id'], bytes);
-    // Update downloaded songs list
-    await _localStorageService.addToDownloadedSongs(song);
+    try {
+      // Validate required fields
+      if (song['id'] == null || song['audio_url'] == null) {
+        throw Exception('Invalid song data: missing id or audio_url');
+      }
+
+      // Check if already downloaded
+      final isDownloaded = await isSongDownloaded(song['id']);
+      if (isDownloaded) {
+        throw Exception('Song already downloaded');
+      }
+
+      // Download audio file
+      final response = await http.get(Uri.parse(song['audio_url']));
+      if (response.statusCode != 200) {
+        throw Exception('Failed to download song: HTTP ${response.statusCode}');
+      }
+
+      // Encrypt and save
+      final fileName = 'song_${song['id']}';
+      final filePath = await _encryptedStorage.encryptAndSave(
+        response.bodyBytes,
+        fileName,
+      );
+
+      // Prepare metadata
+      final metadata = {
+        'user_id': _supabase.auth.currentUser?.id,
+        'song_id': song['id'],
+        'file_path': filePath,
+        'title': song['title'] ?? 'Unknown Title',
+        'artist': song['artist'] ?? 'Unknown Artist',
+        'image_url': song['image_url'],
+        'downloaded_at': DateTime.now().toIso8601String(),
+      };
+
+      // Save metadata to Supabase
+      final result = await _supabase.from('downloaded_songs').upsert(metadata);
+      
+      if (result == null) {
+        throw Exception('Failed to save download metadata');
+      }
+
+    } catch (e) {
+      print('Error downloading song: $e');
+      // Clean up downloaded file if metadata save fails
+      // You might want to add cleanup code here
+      rethrow;
+    }
+  }
+
+  Future<bool> isSongDownloaded(String songId) async {
+    return await _encryptedStorage.isDownloaded('song_$songId');
   }
 
   Future<List<Map<String, dynamic>>> getDownloadedSongs() async {
@@ -662,4 +733,19 @@ class MusicService {
 
   Stream<Map<String, dynamic>> get currentSongStream =>
       _currentSongController.stream;
+
+  Future<void> _recordPlayHistory(Map<String, dynamic> song) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      await _supabase.from('listening_history').insert({
+        'user_id': userId,
+        'song_id': song['id'],
+        'played_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('Error recording play history: $e');
+    }
+  }
 }

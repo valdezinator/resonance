@@ -429,6 +429,37 @@ class _SongListView extends StatelessWidget {
     required this.onLocalSongUpdate,
   }) : super(key: key);
 
+  Widget _buildDownloadButton(BuildContext context, Map<String, dynamic> song) {
+    return FutureBuilder<bool>(
+      future: musicService.isSongDownloaded(song['id']),
+      builder: (context, snapshot) {
+        final isDownloaded = snapshot.data ?? false;
+        
+        return IconButton(
+          icon: Icon(
+            isDownloaded ? Icons.download_done : Icons.download_outlined,
+            color: isDownloaded ? Colors.green : Colors.grey[400],
+          ),
+          onPressed: isDownloaded ? null : () async {
+            try {
+              await musicService.downloadSong(song);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Song downloaded successfully')),
+              );
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to download song: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SliverList(
@@ -475,12 +506,18 @@ class _SongListView extends StatelessWidget {
               ),
             ),
             subtitle: null,
-            trailing: Text(
-              song['duration'] ?? '0:00',
-              style: TextStyle(
-                color: Colors.grey[400],
-                fontSize: 14,
-              ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDownloadButton(context, song),
+                Text(
+                  song['duration'] ?? '0:00',
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
             ),
             onTap: () async {
               try {
