@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'config/supabase_config.dart';
 import 'login_page.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'config/auth_config.dart';
 
 Future<void> main() async {
   try {
@@ -118,7 +119,14 @@ class SignInPage extends StatefulWidget {
 
 class _SignInPageState extends State<SignInPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: [
+      'email',
+      'profile',
+    ],
+    clientId: AuthConfig.androidClientId,  // Use Android client ID for mobile
+    serverClientId: AuthConfig.googleClientId,  // Use Web client ID for server
+  );
   bool _isSigningIn = false;
 
   Future<User?> _handleGoogleSignIn() async {
@@ -127,43 +135,60 @@ class _SignInPageState extends State<SignInPage> {
         _isSigningIn = true;
       });
 
-      // Configure Google Sign In
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
         throw Exception('Sign in cancelled by user');
       }
 
-      // Get Google auth credentials
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      
-      // Sign in with Firebase
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
+      
       final UserCredential userCredential = await _auth.signInWithCredential(credential);
       final User? firebaseUser = userCredential.user;
 
       if (firebaseUser != null) {
         try {
-          // Get Supabase client
           final supabaseClient = supabase.Supabase.instance.client;
 
           // Sign in with Supabase using the ID token
           final supabaseAuthResponse = await supabaseClient.auth.signInWithIdToken(
-            provider: supabase.OAuthProvider.google, // Changed from string to enum
+            provider: supabase.OAuthProvider.google,
             idToken: googleAuth.idToken!,
             accessToken: googleAuth.accessToken,
           );
 
           if (supabaseAuthResponse.session != null) {
-            // Successfully authenticated with both Firebase and Supabase
-            if (mounted) {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (context) => MyApp(user: firebaseUser),
-                ),
-              );
+            try {
+              // Update user metadata in auth.users
+              await supabaseClient.auth.updateUser(supabase.UserAttributes(
+                data: {
+                  'display_name': firebaseUser.displayName,
+                  'photo_url': firebaseUser.photoURL,
+                  'firebase_uid': firebaseUser.uid,
+                  'last_sign_in': DateTime.now().toIso8601String(),
+                },
+              ));
+
+              if (mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => MyApp(user: firebaseUser),
+                  ),
+                );
+              }
+            } catch (e) {
+              print('Error updating Supabase user data: $e');
+              // Continue with Firebase auth even if Supabase update fails
+              if (mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => MyApp(user: firebaseUser),
+                  ),
+                );
+              }
             }
           }
         } catch (e) {
@@ -333,5 +358,8 @@ class _SignInPageState extends State<SignInPage> {
 // For signing out
 // Future<void> signOut() async {
 //   await FirebaseAuth.instance.signOut();
+//   await FirebaseAuth.instance.signOut();
+//   await GoogleSignIn().signOut();
+// }
 //   await GoogleSignIn().signOut();
 // }
