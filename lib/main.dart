@@ -45,7 +45,10 @@ class AuthApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF0C0F14),
         textTheme: GoogleFonts.montserratTextTheme(),
       ),
-      home: const AuthWrapper(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const AuthWrapper(),
+      },
     );
   }
 }
@@ -146,18 +149,14 @@ class _SignInPageState extends State<SignInPage> {
           // Get Supabase client
           final supabaseClient = supabase.Supabase.instance.client;
 
-          // Sign in with Supabase using the Google token
-          final supabaseAuthResponse = await supabaseClient.auth.signInWithOAuth(
-            supabase.OAuthProvider.google,
-            authScreenLaunchMode: supabase.LaunchMode.inAppWebView,
-            // Configure in-app authentication
-            queryParams: {
-              'access_token': googleAuth.accessToken!,
-              'id_token': googleAuth.idToken!,
-            },
+          // Sign in with Supabase using the ID token
+          final supabaseAuthResponse = await supabaseClient.auth.signInWithIdToken(
+            provider: supabase.OAuthProvider.google, // Changed from string to enum
+            idToken: googleAuth.idToken!,
+            accessToken: googleAuth.accessToken,
           );
 
-          if (supabaseAuthResponse != null) {
+          if (supabaseAuthResponse.session != null) {
             // Successfully authenticated with both Firebase and Supabase
             if (mounted) {
               Navigator.of(context).pushReplacement(
