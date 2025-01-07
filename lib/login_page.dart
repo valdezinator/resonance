@@ -746,7 +746,7 @@ class _HomePageState extends State<HomePage> {
       children: [
         Text(
           'Recently Played',
-          style: TextStyle(
+          style: GoogleFonts.montserrat(
             color: Colors.white,
             fontSize: 22,
             fontWeight: FontWeight.bold,
@@ -756,7 +756,7 @@ class _HomePageState extends State<HomePage> {
         SizedBox(
           height: 180,
           child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _recentlyPlayedFuture,
+            future: _musicService.getRecentlyPlayed(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Center(child: CircularProgressIndicator());
@@ -768,37 +768,84 @@ class _HomePageState extends State<HomePage> {
               }
 
               final songs = snapshot.data ?? [];
+              if (songs.isEmpty) {
+                return Center(
+                  child: Text(
+                    'No recently played songs',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                );
+              }
+
               return ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: songs.length,
                 itemBuilder: (context, index) {
                   final song = songs[index]['songs'];
-                  return Container(
-                    width: 140,
-                    margin: EdgeInsets.only(right: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: CachedNetworkImage(
-                            imageUrl: song['image_url'],
-                            width: 140,
-                            height: 140,
-                            fit: BoxFit.cover,
+                  return GestureDetector(
+                    onTap: () async {
+                      try {
+                        setState(() {
+                          currentSong = song;
+                        });
+                        await _musicService.playSong(
+                          song['audio_url'],
+                          currentSong: song,
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to play song: ${e.toString()}'),
+                            backgroundColor: Colors.red,
                           ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          song['title'],
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
+                        );
+                      }
+                    },
+                    child: Container(
+                      width: 140,
+                      margin: EdgeInsets.only(right: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CachedNetworkImage(
+                              imageUrl: song['image_url'] ?? '',
+                              width: 140,
+                              height: 140,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: Colors.grey[900],
+                                child: Center(child: CircularProgressIndicator()),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: Colors.grey[900],
+                                child: Icon(Icons.music_note),
+                              ),
+                            ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                          SizedBox(height: 8),
+                          Text(
+                            song['title'] ?? 'Unknown Title',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            song['artist'] ?? 'Unknown Artist',
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },

@@ -9,7 +9,6 @@ import 'config/supabase_config.dart';
 import 'login_page.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-
 Future<void> main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
@@ -44,16 +43,65 @@ class AuthApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF0C0F14),
-        // textTheme: const TextTheme(
-        //   titleLarge: TextStyle(
-        //     color: Colors.white,
-        //     fontSize: 24,
-        //     fontWeight: FontWeight.w500,
-        //   ),
-        // ),
         textTheme: GoogleFonts.montserratTextTheme(),
       ),
-      home: const SignInPage(),
+      home: const AuthWrapper(),
+    );
+  }
+}
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // Show loading screen while checking auth state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LoadingScreen();
+        }
+        
+        // If we have a user, go to MyApp, otherwise go to SignInPage
+        if (snapshot.hasData && snapshot.data != null) {
+          return MyApp(user: snapshot.data);
+        }
+        
+        return const SignInPage();
+      },
+    );
+  }
+}
+
+class LoadingScreen extends StatelessWidget {
+  const LoadingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0C0F14),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // You can add your app logo here
+            // Image.asset('assets/images/logo.png', height: 100),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Loading...',
+              style: GoogleFonts.montserrat(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -281,3 +329,10 @@ class _SignInPageState extends State<SignInPage> {
     );
   }
 }
+
+
+// For signing out
+// Future<void> signOut() async {
+//   await FirebaseAuth.instance.signOut();
+//   await GoogleSignIn().signOut();
+// }

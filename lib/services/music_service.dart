@@ -129,23 +129,7 @@ class MusicService {
         ),
       ]);
 
-      // If no next song provided, fetch the next song from database
-      if (nextSong == null && currentSong != null) {
-        final response = await _supabase
-            .from('songs')
-            .select()
-            .gt('id',
-                currentSong['id']) // Get songs with ID greater than current
-            .order('id') // Order by ID
-            .limit(1) // Get just the next song
-            .single(); // Get as single record
-
-        if (response != null) {
-          nextSong = response;
-        }
-      }
-
-      // Add next song if available
+      // If nextSong is provided, add it to playlist
       if (nextSong != null && nextSong['audio_url'] != null) {
         playlist.add(
           AudioSource.uri(
@@ -166,7 +150,7 @@ class MusicService {
       await _audioPlayer.play();
       _updateQueueStream();
 
-      // Record play history after successfully starting playback
+      // Record play history immediately after starting playback
       if (currentSong != null) {
         await _recordPlayHistory(currentSong);
       }
@@ -739,11 +723,32 @@ class MusicService {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
-      await _supabase.from('listening_history').insert({
-        'user_id': userId,
-        'song_id': song['id'],
-        'played_at': DateTime.now().toIso8601String(),
-      });
+      // First check if this song exists in listening_history
+      final existingRecord = await _supabase
+          .from('listening_history')
+          .select()
+          .eq('user_id', userId)
+          .eq('song_id', song['id'])
+          .single();
+
+      if (existingRecord != null) {
+        // Update existing record with new timestamp
+        await _supabase
+            .from('listening_history')
+            .update({
+              'played_at': DateTime.now().toIso8601String(),
+              'play_count': (existingRecord['play_count'] ?? 0) + 1,
+            })
+            .eq('id', existingRecord['id']);
+      } else {
+        // Create new record
+        await _supabase.from('listening_history').insert({
+          'user_id': userId,
+          'song_id': song['id'],
+          'played_at': DateTime.now().toIso8601String(),
+          'play_count': 1,
+        });
+      }
     } catch (e) {
       print('Error recording play history: $e');
     }
