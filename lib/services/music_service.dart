@@ -705,16 +705,41 @@ class MusicService {
 
   Future<void> reorderQueue(int oldIndex, int newIndex) async {
     try {
+      // Save current playback state and position
+      final wasPlaying = _audioPlayer.playing;
+      final position = await _audioPlayer.position;
+      final currentIndex = _audioPlayer.currentIndex;
+
       // Adjust indices to account for the currently playing song
-      oldIndex += 1;
+      oldIndex += 1; 
       newIndex += 1;
 
       final playlist = _playlist.sequence.toList();
       final item = playlist.removeAt(oldIndex);
       playlist.insert(newIndex, item);
 
-      await _playlist.clear();
-      await _playlist.addAll(playlist);
+      // Create new playlist without disrupting current playback
+      final newPlaylist = ConcatenatingAudioSource(children: []);
+      await newPlaylist.addAll(playlist.map((source) => 
+        AudioSource.uri(
+          Uri.parse(source.tag['audio_url']),
+          tag: source.tag,
+        )).toList()
+      );
+
+      // Update playlist while preserving current playback
+      _playlist = newPlaylist;
+      await _audioPlayer.setAudioSource(
+        _playlist,
+        initialIndex: currentIndex,
+        initialPosition: position,
+      );
+
+      // Restore playback state
+      if (wasPlaying) {
+        await _audioPlayer.play();
+      }
+
       _updateQueueStream();
     } catch (e) {
       print('Error reordering queue: $e');
