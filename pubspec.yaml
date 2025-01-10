@@ -42,7 +42,9 @@ dependencies:
   flutter_svg: ^2.0.9
   google_fonts: ^6.2.1
   google_sign_in: ^6.2.2
-  http: ^1.2.0
+  http: ^1.2.2
+  image_cropper: ^5.0.0
+  image_picker: ^0.8.4+4
   just_audio: ^0.9.36
   just_audio_background: ^0.0.1-beta.11
   palette_generator: ^0.3.3+5

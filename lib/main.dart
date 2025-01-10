@@ -14,11 +14,11 @@ Future<void> main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Initialize Firebase
-    await Firebase.initializeApp();
-
     // Load environment variables
     await dotenv.load(fileName: ".env");
+
+    // Initialize Firebase
+    await Firebase.initializeApp();
 
     // Initialize Supabase
     await supabase.Supabase.initialize(
@@ -153,7 +153,7 @@ class _SignInPageState extends State<SignInPage> {
         try {
           final supabaseClient = supabase.Supabase.instance.client;
 
-          // Sign in with Supabase using the ID token
+          // Sign in with Supabase first
           final supabaseAuthResponse = await supabaseClient.auth.signInWithIdToken(
             provider: supabase.OAuthProvider.google,
             idToken: googleAuth.idToken!,
@@ -161,35 +161,40 @@ class _SignInPageState extends State<SignInPage> {
           );
 
           if (supabaseAuthResponse.session != null) {
-            try {
-              // Update user metadata in auth.users
-              await supabaseClient.auth.updateUser(supabase.UserAttributes(
-                data: {
-                  'display_name': firebaseUser.displayName,
-                  'photo_url': firebaseUser.photoURL,
+            final userId = supabaseAuthResponse.session!.user.id;
+            
+            // Create or update user record in public.users table
+            await supabaseClient
+                .from('users')
+                .upsert({
+                  'id': userId,
+                  'display_name': firebaseUser.displayName ?? '',
+                  'photo_url': firebaseUser.photoURL ?? '',
                   'firebase_uid': firebaseUser.uid,
-                  'last_sign_in': DateTime.now().toIso8601String(),
-                },
-              ));
+                }, onConflict: 'id');
 
-              if (mounted) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (context) => MyApp(user: firebaseUser),
-                  ),
-                );
-              }
-            } catch (e) {
-              print('Error updating Supabase user data: $e');
-              // Continue with Firebase auth even if Supabase update fails
-              if (mounted) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (context) => MyApp(user: firebaseUser),
-                  ),
-                );
-              }
-            }
+            print('User record created/updated in public.users table');
+            
+            // Update or create user data
+            await supabaseClient.auth.updateUser(supabase.UserAttributes(
+              data: {
+                'display_name': firebaseUser.displayName ?? '',
+                'photo_url': firebaseUser.photoURL ?? '',
+                'firebase_uid': firebaseUser.uid,
+                'last_sign_in': DateTime.now().toIso8601String(),
+              },
+            ));
+
+            print('Supabase session established: ${supabaseAuthResponse.session?.user.id}');
+          }
+
+          // Continue with navigation...
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => MyApp(user: firebaseUser),
+              ),
+            );
           }
         } catch (e) {
           print('Detailed Supabase error: $e');

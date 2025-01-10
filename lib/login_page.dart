@@ -18,6 +18,8 @@ import 'services/audio_handler.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'screens/library_page.dart';
+import 'dart:ui';
 
 class MyApp extends StatelessWidget {
   final User? user;
@@ -30,7 +32,8 @@ class MyApp extends StatelessWidget {
       title: 'Music App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFF0C0F14),
       ),
       home: HomePage(),
@@ -80,13 +83,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> main() async {
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
-    androidNotificationChannelName: 'Audio playback',
-    androidNotificationOngoing: true,
-  );
-  runApp(HomePage());
-}
+    await JustAudioBackground.init(
+      androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
+      androidNotificationChannelName: 'Audio playback',
+      androidNotificationOngoing: true,
+    );
+    runApp(HomePage());
+  }
 
   Future<void> _loadMoreSongs() async {
     if (_isLoadingMore || !_hasMore) return;
@@ -171,6 +174,14 @@ class _HomePageState extends State<HomePage> {
                       musicService: _musicService,
                     )
                   : _selectedIndex == 2
+                      ? LibraryPage(
+                          onNavigate: (index) {
+                            setState(() {
+                              _selectedIndex = index;
+                            });
+                          },
+                        )
+                      : _selectedIndex == 3
                       ? SettingsPage(
                           currentSong: currentSong,
                           onSongPlay: (song) {
@@ -366,63 +377,75 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
-      bottomNavigationBar: Material(
-        color: Colors.transparent,
-        child: Container(
-          height: 80,
-          decoration: BoxDecoration(
-            color: const Color(0xFF282828),
-            border: Border(
-              top: BorderSide(
-                color: Colors.black.withOpacity(0.1),
-                width: 0.5,
+      bottomNavigationBar: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+          child: Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              border: Border(
+                top: BorderSide(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 0.5,
+                ),
               ),
             ),
-          ),
-          child: BottomNavigationBar(
-            elevation: 0,
-            backgroundColor: Colors.transparent,
-            selectedItemColor: Colors.white,
-            unselectedItemColor: Colors.grey,
-            currentIndex: _selectedIndex,
-            type: BottomNavigationBarType.fixed,
-            onTap: (index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-            items: [
-              BottomNavigationBarItem(
-                icon: SvgPicture.asset(
-                  'assets/icons/home_icon.svg',
-                  colorFilter: ColorFilter.mode(
-                    _selectedIndex == 0 ? Colors.white : Colors.grey,
-                    BlendMode.srcIn,
+            child: BottomNavigationBar(
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              selectedItemColor: Colors.white,
+              unselectedItemColor: Colors.grey.withOpacity(0.6),
+              currentIndex: _selectedIndex,
+              type: BottomNavigationBarType.fixed,
+              onTap: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
+              items: [
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/home_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      _selectedIndex == 0 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
                   ),
+                  label: 'Home',
                 ),
-                label: 'Home',
-              ),
-              BottomNavigationBarItem(
-                icon: SvgPicture.asset(
-                  'assets/icons/search_icon.svg',
-                  colorFilter: ColorFilter.mode(
-                    _selectedIndex == 1 ? Colors.white : Colors.grey,
-                    BlendMode.srcIn,
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/search_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      _selectedIndex == 1 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
                   ),
+                  label: 'Search',
                 ),
-                label: 'Search',
-              ),
-              BottomNavigationBarItem(
-                icon: SvgPicture.asset(
-                  'assets/icons/profile_icon.svg',
-                  colorFilter: ColorFilter.mode(
-                    _selectedIndex == 2 ? Colors.white : Colors.grey,
-                    BlendMode.srcIn,
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/library_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      _selectedIndex == 2 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
                   ),
+                  label: 'Library',
                 ),
-                label: 'Profile',
-              ),
-            ],
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/profile_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      _selectedIndex == 3 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Profile',
+                ),
+              ],
+            ),
           ),
         ),
       ),
