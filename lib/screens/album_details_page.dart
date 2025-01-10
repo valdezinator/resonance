@@ -535,14 +535,27 @@ class _SongListView extends StatelessWidget {
                   'audio_url': audioUrl,
                 };
 
+                // Get subsequent songs
+                final subsequentSongs = songs
+                    .skip(index + 1)
+                    .map((s) => {
+                          ...s,
+                          'image_url': album['image_url'],
+                        })
+                    .toList();
+
                 // Update local state first
                 onLocalSongUpdate(songData);
 
                 // Then update parent state
                 onSongPlay(songData);
 
-                // Finally play the song
-                await musicService.playSong(audioUrl);
+                // Finally play the song with subsequent songs in queue
+                await musicService.playSong(
+                  audioUrl,
+                  currentSong: songData,
+                  subsequentSongs: subsequentSongs,
+                );
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

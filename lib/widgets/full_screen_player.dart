@@ -211,14 +211,23 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                               stream:
                                                   widget.musicService.queueStream,
                                               builder: (context, snapshot) {
+                                                if (snapshot.hasError) {
+                                                  print('Queue stream error: ${snapshot.error}');  // Debug log
+                                                  return Center(child: Text('Error loading queue'));
+                                                }
+
                                                 if (!snapshot.hasData) {
-                                                  return const Center(
-                                                    child:
-                                                        CircularProgressIndicator(),
-                                                  );
+                                                  print('No queue data available');  // Debug log
+                                                  return const Center(child: CircularProgressIndicator());
                                                 }
 
                                                 final queue = snapshot.data!;
+                                                print('Queue length in UI: ${queue.length}');  // Debug log
+
+                                                if (queue.isEmpty) {
+                                                  return Center(child: Text('Queue is empty', style: TextStyle(color: Colors.grey)));
+                                                }
+
                                                 return ReorderableListView.builder(
                                                   itemCount: queue.length,
                                                   onReorder: (oldIndex, newIndex) {

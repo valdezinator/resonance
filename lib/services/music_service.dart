@@ -118,25 +118,29 @@ class MusicService {
 
   Future<void> playSong(String url,
       {Map<String, dynamic>? currentSong,
-      Map<String, dynamic>? nextSong}) async {
+      Map<String, dynamic>? nextSong,
+      List<Map<String, dynamic>>? subsequentSongs}) async {
     try {
       // Create playlist with current song
       final playlist = ConcatenatingAudioSource(children: [
         AudioSource.uri(
-          Uri.parse(
-              currentSong?['audio_url'] ?? currentSong?['audio_url'] ?? url),
-          tag: currentSong ?? {'url': url},
+          Uri.parse(currentSong?['audio_url'] ?? url),
+          tag: currentSong ?? {'audio_url': url},  // Make sure we pass the full song data
         ),
       ]);
 
-      // If nextSong is provided, add it to playlist
-      if (nextSong != null && nextSong['audio_url'] != null) {
-        playlist.add(
-          AudioSource.uri(
-            Uri.parse(nextSong['audio_url']),
-            tag: nextSong,
-          ),
-        );
+      // Add all subsequent songs to playlist
+      if (subsequentSongs != null) {
+        for (var song in subsequentSongs) {
+          if (song['audio_url'] != null) {
+            playlist.add(
+              AudioSource.uri(
+                Uri.parse(song['audio_url']),
+                tag: song,  // Pass the complete song data as tag
+              ),
+            );
+          }
+        }
       }
 
       await _audioPlayer.setAudioSource(
@@ -292,23 +296,23 @@ class MusicService {
   void _updateQueueStream() {
     try {
       final currentQueue = _playlist.sequence
-          .map((source) => {
-                'id': source.tag['url'] ?? '',
-                'title': source.tag['title'] ?? 'Unknown Title',
-                'artist': source.tag['artist'] ?? 'Unknown Artist',
-                'image_url': source.tag['image_url'] ?? '',
-                'audio_url': source.tag['url'] ?? '',
-              })
+          .map((source) => source.tag as Map<String, dynamic>)  // Changed: directly use the tag
           .toList();
 
+      print('Debug - Queue length before removal: ${currentQueue.length}');  // Debug log
+      
       // Skip the currently playing song
       if (currentQueue.isNotEmpty) {
         currentQueue.removeAt(0);
       }
 
+      print('Debug - Queue length after removal: ${currentQueue.length}');  // Debug log
+      print('Debug - Queue contents: $currentQueue');  // Debug log
+      
       _queueController.add(currentQueue);
     } catch (e) {
       print('Error updating queue stream: $e');
+      print('Error stack trace: ${StackTrace.current}');  // Added stack trace
     }
   }
 
@@ -476,12 +480,7 @@ class MusicService {
       await _playlist.add(
         AudioSource.uri(
           Uri.parse(song['audio_url']),
-          tag: {
-            'url': song['audio_url'],
-            'title': song['title'],
-            'artist': song['artist'],
-            'image_url': song['image_url'],
-          },
+          tag: song,  // Pass the entire song object as the tag
         ),
       );
       _updateQueueStream();
@@ -694,7 +693,15 @@ class MusicService {
     throw Exception('Failed to download file');
   }
 
-  Stream<List<Map<String, dynamic>>> get queueStream => _queueController.stream;
+  Stream<List<Map<String, dynamic>>> get queueStream {
+    // Emit current queue immediately when subscribed
+    Future(() {
+      if (_playlist.sequence.isNotEmpty) {
+        _updateQueueStream();
+      }
+    });
+    return _queueController.stream;
+  }
 
   Future<void> reorderQueue(int oldIndex, int newIndex) async {
     try {
