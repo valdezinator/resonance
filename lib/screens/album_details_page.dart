@@ -6,6 +6,7 @@ import 'package:palette_generator/palette_generator.dart';
 import '../widgets/floating_player_mixin.dart';
 import 'dart:ui';
 import 'dart:io';
+import 'package:google_fonts/google_fonts.dart';
 
 class AlbumDetailsPage extends StatefulWidget {
   final Map<String, dynamic> album;
@@ -619,8 +620,8 @@ class _SongListView extends StatelessWidget {
 
               final songToDownload = {
                 ...song,
-                'image_url': album['image_url'],
                 'album_title': album['title'],
+                // Remove the image_url override to preserve the original song image
               };
               
               await musicService.downloadSong(songToDownload);
@@ -746,7 +747,7 @@ class _SongListView extends StatelessWidget {
                 children: [
                   Text(
                     song['title'],
-                    style: TextStyle(
+                    style: GoogleFonts.lato(
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
@@ -756,7 +757,7 @@ class _SongListView extends StatelessWidget {
                   ),
                   Text(
                     song['artist'],
-                    style: TextStyle(
+                    style: GoogleFonts.lato(  // Changed this line
                       color: Colors.grey[400],
                       fontSize: 14,
                     ),
@@ -790,7 +791,8 @@ class _SongListView extends StatelessWidget {
                 final songData = {
                   ...song,
                   'id': song['id'],
-                  'image_url': album['image_url'],
+                  // Use song's image_url if available, fallback to album image
+                  'image_url': song['image_url'] ?? album['image_url'],
                   'title': song['title'] ?? 'Unknown Title',
                   'artist': song['artist'] ?? 'Unknown Artist',
                   'audio_url': audioUrl,
@@ -801,7 +803,8 @@ class _SongListView extends StatelessWidget {
                     .skip(index + 1)
                     .map((s) => {
                           ...s,
-                          'image_url': album['image_url'],
+                          // Only use album image as fallback
+                          'image_url': s['image_url'] ?? album['image_url'],
                         })
                     .toList();
 

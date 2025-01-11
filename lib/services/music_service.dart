@@ -710,7 +710,8 @@ class MusicService {
   Future<void> downloadSong(Map<String, dynamic> song) async {
     final songId = song['id'];
     final albumId = song['album_id'];
-    final imageUrl = song['image_url'];
+    final originalImageUrl = song['image_url'];  // Store original image URL
+    final albumImageUrl = song['album_image_url'];  // Store album image URL separately
 
     try {
       print('Starting download for song ID: $songId');
@@ -738,40 +739,41 @@ class MusicService {
       final encryptedBytes = _xorEncrypt(bytes, songId);
       await File(filePath).writeAsBytes(encryptedBytes);
 
-      // Save metadata with secure file reference
+      // Create metadata preserving all original song data
       final metadata = {
-        ...song,
+        ...song,  // Keep all original song data
         'downloaded_at': DateTime.now().toIso8601String(),
-        'secure_file': secureFileName,  // Store only filename, not full path
+        'secure_file': secureFileName,
+        'original_image_url': originalImageUrl,  // Store original image URL
       };
       
-      // Cache the image if available
-      if (imageUrl != null && imageUrl.isNotEmpty) {
-        final cachedImagePath = await _cacheImage(imageUrl, songId);
+      // Cache the song's image if available
+      if (originalImageUrl != null && originalImageUrl.isNotEmpty) {
+        final cachedImagePath = await _cacheImage(originalImageUrl, songId);
         metadata['cached_image_path'] = cachedImagePath;
       }
 
       await _localStorageService.saveData('metadata_$songId', metadata);
 
-      // Save album metadata
+      // Handle album metadata separately
       if (albumId != null) {
-        await _localStorageService.saveAlbumMetadata(albumId, {
+        final albumMetadata = {
           'id': albumId,
           'title': song['album_title'],
           'artist': song['artist'],
-          'image_url': song['image_url'],
-        });
-        await _localStorageService.addDownloadedAlbumId(albumId);
-      }
-
-      // Cache album image as well
-      if (albumId != null && song['album_image_url'] != null) {
-        final albumImagePath = await _cacheImage(song['album_image_url'], 'album_$albumId');
-        final albumMetadata = {
-          ...await _localStorageService.getAlbumMetadata(albumId) ?? {},
-          'cached_image_path': albumImagePath,
+          'image_url': albumImageUrl ?? song['image_url'],  // Use album image if available
+          'original_image_url': albumImageUrl ?? song['image_url'],  // Store original album image
         };
+
         await _localStorageService.saveAlbumMetadata(albumId, albumMetadata);
+        await _localStorageService.addDownloadedAlbumId(albumId);
+
+        // Cache album image
+        if (albumImageUrl != null) {
+          final albumImagePath = await _cacheImage(albumImageUrl, 'album_$albumId');
+          albumMetadata['cached_image_path'] = albumImagePath;
+          await _localStorageService.saveAlbumMetadata(albumId, albumMetadata);
+        }
       }
 
       await _updateDownloadedSongsList(metadata);
@@ -1063,6 +1065,7 @@ class MusicService {
 
   Future<String?> getCachedImagePath(String id) async {
     try {
+      // First check for cached image
       final directory = await getApplicationSupportDirectory();
       final imagePath = '${directory.path}/images/${id}_image.jpg';
       final imageFile = File(imagePath);
@@ -1070,6 +1073,15 @@ class MusicService {
       if (await imageFile.exists()) {
         return imagePath;
       }
+
+      // If no cached image, check metadata for original image URL
+      final metadata = await _localStorageService.getData('metadata_$id');
+      if (metadata != null && metadata['original_image_url'] != null) {
+        // Try to cache the original image
+        final cachedPath = await _cacheImage(metadata['original_image_url'], id);
+        return cachedPath;
+      }
+      
       return null;
     } catch (e) {
       print('Error getting cached image path: $e');
