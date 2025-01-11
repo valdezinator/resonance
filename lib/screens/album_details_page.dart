@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:palette_generator/palette_generator.dart';
 import '../widgets/floating_player_mixin.dart';
 import 'dart:ui';
+import 'dart:io';
 
 class AlbumDetailsPage extends StatefulWidget {
   final Map<String, dynamic> album;
@@ -452,6 +453,116 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
   }
 }
 
+class DownloadButton extends StatefulWidget {
+  final bool isDownloaded;
+  final Function() onPressed;
+
+  const DownloadButton({
+    Key? key,
+    required this.isDownloaded,
+    required this.onPressed,
+  }) : super(key: key);
+
+  @override
+  State<DownloadButton> createState() => _DownloadButtonState();
+}
+
+class _DownloadButtonState extends State<DownloadButton> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _downloadedScale;
+  bool _isDownloading = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    _downloadedScale = TweenSequence([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 1.3)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 40.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.3, end: 1.0)
+            .chain(CurveTween(curve: Curves.elasticIn)),
+        weight: 60.0,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _startDownload() async {
+    setState(() => _isDownloading = true);
+    _controller.repeat();
+    
+    await widget.onPressed();
+    
+    _controller.stop();
+    setState(() => _isDownloading = false);
+    
+    // Add completion animation
+    _controller.reset();
+    _controller.forward();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isDownloaded) {
+      return ScaleTransition(
+        scale: _downloadedScale,
+        child: IconButton(
+          icon: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(
+                Icons.check_circle,
+                color: Colors.green[400],
+                size: 24,
+              ),
+              Icon(
+                Icons.check_circle_outline,
+                color: Colors.green[400]?.withOpacity(0.5),
+                size: 28,
+              ),
+            ],
+          ),
+          onPressed: null,
+        ),
+      );
+    }
+
+    if (_isDownloading) {
+      return Container(
+        width: 48,
+        height: 48,
+        padding: EdgeInsets.all(12),
+        child: CircularProgressIndicator(
+          strokeWidth: 2.5,
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+        ),
+      );
+    }
+
+    return IconButton(
+      icon: Icon(
+        Icons.download_rounded,
+        color: Colors.grey[400],
+        size: 24,
+      ),
+      onPressed: _startDownload,
+    );
+  }
+}
+
 class _SongListView extends StatelessWidget {
   final List<Map<String, dynamic>> songs;
   final Map<String, dynamic> album;
@@ -470,23 +581,42 @@ class _SongListView extends StatelessWidget {
 
   Widget _buildDownloadButton(BuildContext context, Map<String, dynamic> song) {
     return FutureBuilder<bool>(
+      // Add key to force rebuild when download state changes
+      key: ValueKey('download_${song['id']}_${DateTime.now().millisecondsSinceEpoch}'),
       future: musicService.isSongDownloaded(song['id']),
       builder: (context, snapshot) {
         final isDownloaded = snapshot.data ?? false;
         
-        return IconButton(
-          icon: Icon(
-            isDownloaded ? Icons.download_done : Icons.download_outlined,
-            color: isDownloaded ? Colors.green : Colors.grey[400],
-          ),
-          onPressed: isDownloaded ? null : () async {
+        return DownloadButton(
+          isDownloaded: isDownloaded,
+          onPressed: () async {
             try {
-              // Show download progress
+              // Show downloading indicator
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Downloading song...')),
+                SnackBar(
+                  content: Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Downloading ${song['title']}...'),
+                    ],
+                  ),
+                  duration: Duration(seconds: 2),
+                  backgroundColor: Colors.black87,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               );
 
-              // Download song with complete metadata
               final songToDownload = {
                 ...song,
                 'image_url': album['image_url'],
@@ -495,22 +625,91 @@ class _SongListView extends StatelessWidget {
               
               await musicService.downloadSong(songToDownload);
 
-              // Force rebuild of the widget to update download status
+              // Force a rebuild of the entire list tile
               (context as Element).markNeedsBuild();
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Song downloaded successfully')),
-              );
+              // Add a slight delay before showing success message to ensure UI updates
+              await Future.delayed(Duration(milliseconds: 100));
+
+              // Show success message
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, color: Colors.green[400]),
+                        SizedBox(width: 12),
+                        Text('Downloaded successfully'),
+                      ],
+                    ),
+                    duration: Duration(seconds: 2),
+                    backgroundColor: Colors.black87,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                );
+              }
             } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Failed to download song: ${e.toString()}'),
-                  backgroundColor: Colors.red,
-                ),
-              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red[400]),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text('Download failed: ${e.toString()}'),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: Colors.black87,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                );
+              }
             }
           },
         );
+      },
+    );
+  }
+
+  Widget _buildSongImage(Map<String, dynamic> song) {
+    return FutureBuilder<String?>(
+      future: musicService.getCachedImagePath(song['id']),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data != null) {
+          // Use cached image
+          return Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              image: DecorationImage(
+                image: FileImage(File(snapshot.data!)),
+                fit: BoxFit.cover,
+              ),
+            ),
+          );
+        } else {
+          // Use network image or album image
+          return Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              image: DecorationImage(
+                image: NetworkImage(song['image_url'] ?? album['image_url']),
+                fit: BoxFit.cover,
+              ),
+            ),
+          );
+        }
       },
     );
   }
@@ -523,15 +722,22 @@ class _SongListView extends StatelessWidget {
           final song = songs[index];
           return ListTile(
             contentPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            leading: SizedBox(
-              width: 24,
-              child: Text(
-                '${index + 1}',
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 16,
+            leading: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 24,
+                  child: Text(
+                    '${index + 1}',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
-              ),
+                SizedBox(width: 12),
+                _buildSongImage(song),
+              ],
             ),
             title: Padding(
               padding: EdgeInsets.only(left: 8),

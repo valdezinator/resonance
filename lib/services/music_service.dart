@@ -710,6 +710,7 @@ class MusicService {
   Future<void> downloadSong(Map<String, dynamic> song) async {
     final songId = song['id'];
     final albumId = song['album_id'];
+    final imageUrl = song['image_url'];
 
     try {
       print('Starting download for song ID: $songId');
@@ -744,6 +745,12 @@ class MusicService {
         'secure_file': secureFileName,  // Store only filename, not full path
       };
       
+      // Cache the image if available
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        final cachedImagePath = await _cacheImage(imageUrl, songId);
+        metadata['cached_image_path'] = cachedImagePath;
+      }
+
       await _localStorageService.saveData('metadata_$songId', metadata);
 
       // Save album metadata
@@ -755,6 +762,16 @@ class MusicService {
           'image_url': song['image_url'],
         });
         await _localStorageService.addDownloadedAlbumId(albumId);
+      }
+
+      // Cache album image as well
+      if (albumId != null && song['album_image_url'] != null) {
+        final albumImagePath = await _cacheImage(song['album_image_url'], 'album_$albumId');
+        final albumMetadata = {
+          ...await _localStorageService.getAlbumMetadata(albumId) ?? {},
+          'cached_image_path': albumImagePath,
+        };
+        await _localStorageService.saveAlbumMetadata(albumId, albumMetadata);
       }
 
       await _updateDownloadedSongsList(metadata);
@@ -776,9 +793,22 @@ class MusicService {
   }
 
   Future<bool> isSongDownloaded(String songId) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/song_$songId.mp3');
-    return file.exists();
+    try {
+      // Check if metadata exists for this song
+      final metadata = await _localStorageService.getData('metadata_$songId');
+      if (metadata == null) return false;
+
+      // Verify the secure file exists
+      final secureFileName = metadata['secure_file'];
+      if (secureFileName == null) return false;
+
+      final filePath = await _getSecureFilePath(secureFileName);
+      final file = File(filePath);
+      return await file.exists();
+    } catch (e) {
+      print('Error checking if song is downloaded: $e');
+      return false;
+    }
   }
 
   Future<List<int>?> _downloadFromStorage(String songId) async {
@@ -1003,5 +1033,47 @@ class MusicService {
   Future<String> _getSecureFilePath(String fileName) async {
     final directory = await getApplicationSupportDirectory(); // More secure than getApplicationDocumentsDirectory
     return '${directory.path}/$fileName';
+  }
+
+  Future<String> _cacheImage(String imageUrl, String id) async {
+    try {
+      final response = await http.get(Uri.parse(imageUrl));
+      if (response.statusCode == 200) {
+        final directory = await getApplicationSupportDirectory();
+        final imagePath = '${directory.path}/images/${id}_image.jpg';
+        
+        // Create images directory if it doesn't exist
+        final imageDir = Directory('${directory.path}/images');
+        if (!await imageDir.exists()) {
+          await imageDir.create(recursive: true);
+        }
+        
+        // Save the image
+        final imageFile = File(imagePath);
+        await imageFile.writeAsBytes(response.bodyBytes);
+        
+        return imagePath;
+      }
+      throw Exception('Failed to download image');
+    } catch (e) {
+      print('Error caching image: $e');
+      rethrow;
+    }
+  }
+
+  Future<String?> getCachedImagePath(String id) async {
+    try {
+      final directory = await getApplicationSupportDirectory();
+      final imagePath = '${directory.path}/images/${id}_image.jpg';
+      final imageFile = File(imagePath);
+      
+      if (await imageFile.exists()) {
+        return imagePath;
+      }
+      return null;
+    } catch (e) {
+      print('Error getting cached image path: $e');
+      return null;
+    }
   }
 }
