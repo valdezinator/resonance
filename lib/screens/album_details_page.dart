@@ -4,6 +4,7 @@ import '../widgets/bottom_player.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:palette_generator/palette_generator.dart';
 import '../widgets/floating_player_mixin.dart';
+import 'dart:ui';
 
 class AlbumDetailsPage extends StatefulWidget {
   final Map<String, dynamic> album;
@@ -40,12 +41,12 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
   void initState() {
     super.initState();
     _localCurrentSong = widget.currentSong;
-    _songsFuture = widget.musicService.getAlbumSongs(widget.album['id']);
-    _loadSongs();
+    _loadAlbumSongs();
   }
 
-  Future<void> _loadSongs() async {
+  Future<void> _loadAlbumSongs() async {
     try {
+      _songsFuture = widget.musicService.getAlbumSongs(widget.album['id']);
       final songs = await _songsFuture;
       setState(() {
         _allSongs = songs;
@@ -53,6 +54,13 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
       });
     } catch (e) {
       print('Error loading songs: $e');
+      // Try to load downloaded songs for this album
+      final downloadedSongs = 
+          await widget.musicService.getDownloadedSongsForAlbum(widget.album['id']);
+      setState(() {
+        _allSongs = downloadedSongs;
+        _filteredSongs = downloadedSongs;
+      });
     }
   }
 
@@ -130,9 +138,33 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
 
               if (snapshot.hasError && _allSongs.isEmpty) {
                 return Center(
-                  child: Text(
-                    'Error loading songs: ${snapshot.error}',
-                    style: TextStyle(color: Colors.white),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Unable to load songs',
+                        style: TextStyle(color: Colors.white, fontSize: 18),
+                      ),
+                      SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () async {
+                          // Try to load downloaded songs for this album
+                          try {
+                            final downloadedSongs = 
+                                await widget.musicService.getDownloadedSongsForAlbum(widget.album['id']);
+                            setState(() {
+                              _allSongs = downloadedSongs;
+                              _filteredSongs = downloadedSongs;
+                            });
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('No downloaded songs available')),
+                            );
+                          }
+                        },
+                        child: Text('Show Downloaded Songs'),
+                      ),
+                    ],
                   ),
                 );
               }
@@ -348,65 +380,72 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
           ),
         ],
       ),
-      bottomNavigationBar: Material(
-        color: Colors.transparent,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              height: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFF282828), // Fixed dark color for nav bar
-                border: Border(
-                  top: BorderSide(
-                    color: Colors.black.withOpacity(0.1),
-                    width: 0.5,
-                  ),
+      bottomNavigationBar: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+          child: Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              border: Border(
+                top: BorderSide(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 0.5,
                 ),
               ),
-              child: BottomNavigationBar(
-                elevation: 0,
-                backgroundColor: Colors.transparent,
-                selectedItemColor: Colors.white,
-                unselectedItemColor: Colors.grey,
-                currentIndex: widget.selectedIndex,
-                type: BottomNavigationBarType.fixed,
-                onTap: widget.onIndexChanged,
-                items: [
-                  BottomNavigationBarItem(
-                    icon: SvgPicture.asset(
-                      'assets/icons/home_icon.svg',
-                      colorFilter: ColorFilter.mode(
-                        widget.selectedIndex == 0 ? Colors.white : Colors.grey,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    label: 'Home',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: SvgPicture.asset(
-                      'assets/icons/search_icon.svg',
-                      colorFilter: ColorFilter.mode(
-                        widget.selectedIndex == 1 ? Colors.white : Colors.grey,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    label: 'Search',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: SvgPicture.asset(
-                      'assets/icons/profile_icon.svg',
-                      colorFilter: ColorFilter.mode(
-                        widget.selectedIndex == 2 ? Colors.white : Colors.grey,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    label: 'Profile',
-                  ),
-                ],
-              ),
             ),
-          ],
+            child: BottomNavigationBar(
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              selectedItemColor: Colors.white,
+              unselectedItemColor: Colors.grey.withOpacity(0.6),
+              currentIndex: widget.selectedIndex,
+              type: BottomNavigationBarType.fixed,
+              onTap: widget.onIndexChanged,
+              items: [
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/home_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 0 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Home',
+                ),
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/search_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 1 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Search',
+                ),
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/library_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 2 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Library',
+                ),
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/profile_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 3 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Profile',
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

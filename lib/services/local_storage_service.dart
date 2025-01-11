@@ -1,4 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:path_provider/path_provider.dart';  // Add this import
+import 'dart:io';  // Add this import
 
 class LocalStorageService {
   final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
@@ -18,4 +21,69 @@ class LocalStorageService {
     final prefs = await _prefs;
     return prefs.getStringList('downloaded_songs')?.map((id) => {'id': id}).toList() ?? [];
   }
-} 
+
+  Future<void> saveData(String key, dynamic value) async {
+    final prefs = await _prefs;
+    
+    // Convert value to JSON string before saving
+    String jsonString = json.encode(value);
+    await prefs.setString(key, jsonString);
+  }
+
+  Future<dynamic> getData(String key) async {
+    final prefs = await _prefs;
+    String? jsonString = prefs.getString(key);
+    
+    if (jsonString == null) return null;
+    
+    // Parse JSON string back to data
+    return json.decode(jsonString);
+  }
+
+  Future<void> removeData(String key) async {
+    final prefs = await _prefs;
+    await prefs.remove(key);
+  }
+
+  Future<void> clearAll() async {
+    final prefs = await _prefs;
+    await prefs.clear();
+  }
+
+  Future<void> saveAlbumMetadata(String albumId, Map<String, dynamic> albumData) async {
+    final prefs = await _prefs;
+    final key = 'album_$albumId';
+    await saveData(key, albumData);
+  }
+
+  Future<Map<String, dynamic>?> getAlbumMetadata(String albumId) async {
+    final prefs = await _prefs;
+    final key = 'album_$albumId';
+    return await getData(key);
+  }
+
+  Future<List<String>> getDownloadedAlbumIds() async {
+    final prefs = await _prefs;
+    return prefs.getStringList('downloaded_album_ids') ?? [];
+  }
+
+  Future<void> addDownloadedAlbumId(String albumId) async {
+    final prefs = await _prefs;
+    final ids = await getDownloadedAlbumIds();
+    if (!ids.contains(albumId)) {
+      ids.add(albumId);
+      await prefs.setStringList('downloaded_album_ids', ids);
+    }
+  }
+
+  Future<bool> isDownloaded(String fileName) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/$fileName.mp3');
+      return await file.exists();
+    } catch (e) {
+      print('Error checking if file is downloaded: $e');
+      return false;
+    }
+  }
+}

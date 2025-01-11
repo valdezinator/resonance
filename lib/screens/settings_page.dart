@@ -11,12 +11,16 @@ class SettingsPage extends StatefulWidget {
   final Map<String, dynamic>? currentSong;
   final Function(Map<String, dynamic>?) onSongPlay;
   final MusicService musicService;
+  final int selectedIndex;              // Add this
+  final Function(int) onIndexChanged;   // Add this
 
   const SettingsPage({
     Key? key,
     this.currentSong,
     required this.onSongPlay,
     required this.musicService,
+    required this.selectedIndex,        // Add this
+    required this.onIndexChanged,       // Add this
   }) : super(key: key);
 
   @override

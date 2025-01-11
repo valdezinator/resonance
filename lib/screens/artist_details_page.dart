@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../services/music_service.dart';
 import '../widgets/bottom_player.dart';
 import '../widgets/floating_player_mixin.dart';
@@ -8,6 +10,8 @@ class ArtistDetailsPage extends StatefulWidget {
   final MusicService musicService;
   final Function(Map<String, dynamic>?) onSongPlay;
   final Map<String, dynamic>? currentSong;
+  final int selectedIndex;
+  final Function(int) onIndexChanged;
 
   const ArtistDetailsPage({
     Key? key,
@@ -15,6 +19,8 @@ class ArtistDetailsPage extends StatefulWidget {
     required this.musicService,
     required this.onSongPlay,
     this.currentSong,
+    required this.selectedIndex,
+    required this.onIndexChanged,
   }) : super(key: key);
 
   @override
@@ -340,6 +346,74 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
             onSongPlay: widget.onSongPlay,
           ),
         ],
+      ),
+      bottomNavigationBar: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+          child: Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              border: Border(
+                top: BorderSide(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 0.5,
+                ),
+              ),
+            ),
+            child: BottomNavigationBar(
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              selectedItemColor: Colors.white,
+              unselectedItemColor: Colors.grey.withOpacity(0.6),
+              currentIndex: widget.selectedIndex,
+              type: BottomNavigationBarType.fixed,
+              onTap: widget.onIndexChanged,
+              items: [
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/home_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 0 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Home',
+                ),
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/search_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 1 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Search',
+                ),
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/library_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 2 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Library',
+                ),
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/profile_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 3 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Profile',
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -37,6 +37,11 @@ class EncryptedStorageService {
     }
   }
 
+  Future<String> getFilePath(String fileName) async {
+    final directory = await getApplicationDocumentsDirectory();
+    return '${directory.path}/$fileName.enc';
+  }
+
   Future<String> encryptAndSave(List<int> data, String fileName) async {
     if (!_isInitialized || _key == null || _iv == null) {
       throw Exception('EncryptedStorageService not initialized');
@@ -45,11 +50,12 @@ class EncryptedStorageService {
     final encrypter = Encrypter(AES(_key!));
     final encrypted = encrypter.encryptBytes(data, iv: _iv!);
     
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/$fileName.enc');
+    final filePath = await getFilePath(fileName);
+    final file = File(filePath);
     await file.writeAsBytes(encrypted.bytes);
     
-    return file.path;
+    print('Saved encrypted file to: $filePath');
+    return filePath;
   }
 
   Future<List<int>> decryptFile(String filePath) async {
@@ -57,18 +63,22 @@ class EncryptedStorageService {
       throw Exception('EncryptedStorageService not initialized');
     }
 
+    print('Attempting to decrypt file at: $filePath');
     final file = File(filePath);
+    if (!await file.exists()) {
+      throw Exception('Encrypted file not found at: $filePath');
+    }
+
     final bytes = await file.readAsBytes();
-    
     final encrypter = Encrypter(AES(_key!));
-    final decrypted = encrypter.decryptBytes(Encrypted(bytes), iv: _iv!);
-    
-    return decrypted;
+    return encrypter.decryptBytes(Encrypted(bytes), iv: _iv!);
   }
 
   Future<bool> isDownloaded(String fileName) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/$fileName.enc');
-    return file.exists();
+    final filePath = await getFilePath(fileName);
+    final file = File(filePath);
+    final exists = await file.exists();
+    print('Checking if file exists: $exists at ${file.path}');
+    return exists;
   }
 }

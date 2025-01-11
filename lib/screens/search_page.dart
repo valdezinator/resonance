@@ -3,17 +3,22 @@ import '../services/music_service.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../widgets/bottom_player.dart';
 import '../widgets/floating_player_mixin.dart';
+import 'dart:ui';
 
 class SearchPage extends StatefulWidget {
   final Map<String, dynamic>? currentSong;
   final Function(Map<String, dynamic>?) onSongPlay;
   final MusicService musicService;
+  final int selectedIndex;
+  final Function(int) onIndexChanged;
 
   const SearchPage({
     Key? key,
     this.currentSong,
     required this.onSongPlay,
     required this.musicService,
+    required this.selectedIndex,
+    required this.onIndexChanged,
   }) : super(key: key);
 
   @override
@@ -400,40 +405,110 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFF121212),
-      child: Stack(
-        children: [
-          SafeArea(
-            child: Column(
-              children: [
-                _buildSearchBar(),
-                Expanded(
-                  child: _searchController.text.isEmpty
-                      ? SingleChildScrollView(
-                          padding: EdgeInsets.only(
-                            bottom: MediaQuery.of(context).padding.bottom + 80,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildBrowseCategories(),
-                              _buildTopGenres(),
-                            ],
-                          ),
-                        )
-                      : _buildSearchResults(),
+    return Scaffold(
+      body: Container(
+        color: const Color(0xFF121212),
+        child: Stack(
+          children: [
+            SafeArea(
+              child: Column(
+                children: [
+                  _buildSearchBar(),
+                  Expanded(
+                    child: _searchController.text.isEmpty
+                        ? SingleChildScrollView(
+                            padding: EdgeInsets.only(
+                              bottom: MediaQuery.of(context).padding.bottom + 80,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildBrowseCategories(),
+                                _buildTopGenres(),
+                              ],
+                            ),
+                          )
+                        : _buildSearchResults(),
+                  ),
+                ],
+              ),
+            ),
+            if (_isPlayerVisible)
+              buildFloatingBottomPlayer(
+                currentSong: widget.currentSong,
+                musicService: widget.musicService,
+                onSongPlay: widget.onSongPlay,
+              ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+          child: Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              border: Border(
+                top: BorderSide(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 0.5,
+                ),
+              ),
+            ),
+            child: BottomNavigationBar(
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              selectedItemColor: Colors.white,
+              unselectedItemColor: Colors.grey.withOpacity(0.6),
+              currentIndex: widget.selectedIndex,
+              type: BottomNavigationBarType.fixed,
+              onTap: widget.onIndexChanged,
+              items: [
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/home_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 0 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Home',
+                ),
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/search_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 1 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Search',
+                ),
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/library_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 2 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Library',
+                ),
+                BottomNavigationBarItem(
+                  icon: SvgPicture.asset(
+                    'assets/icons/profile_icon.svg',
+                    colorFilter: ColorFilter.mode(
+                      widget.selectedIndex == 3 ? Colors.white : Colors.grey,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                  label: 'Profile',
                 ),
               ],
             ),
           ),
-          if (_isPlayerVisible)
-            buildFloatingBottomPlayer(
-              currentSong: widget.currentSong,
-              musicService: widget.musicService,
-              onSongPlay: widget.onSongPlay,
-            ),
-        ],
+        ),
       ),
     );
   }

@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:convert';
 
+
 class MusicService {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final _supabase = Supabase.instance.client;
@@ -20,6 +21,10 @@ class MusicService {
   final _currentSongController =
       StreamController<Map<String, dynamic>>.broadcast();
   final EncryptedStorageService _encryptedStorage = EncryptedStorageService();
+
+  static const String ALBUMS_CACHE_KEY = 'albums_cache';
+  static const String ARTISTS_CACHE_KEY = 'artists_cache';
+  static const String SONGS_CACHE_KEY = 'songs_cache';
 
   MusicService() {
     _playlist = ConcatenatingAudioSource(children: []);
@@ -84,20 +89,27 @@ class MusicService {
 
   Future<List<Map<String, dynamic>>> getAlbums() async {
     try {
+      // Try to fetch from network
       final response = await _supabase
           .from('albums')
           .select()
-          .eq('category', 'hits') // Filter for "hits" category
+          .eq('category', 'hits')
           .order('created_at');
 
-      if (response == null) {
-        throw Exception('No data received from Supabase');
-      }
-
-      return List<Map<String, dynamic>>.from(response as List);
+      final albums = List<Map<String, dynamic>>.from(response as List);
+      await _localStorageService.saveData(ALBUMS_CACHE_KEY, albums);
+      return albums;
     } catch (e) {
-      print('Error fetching albums: $e');
-      rethrow;
+      print('Error fetching albums from network: $e');
+      
+      // Try to get cached albums first
+      final cachedAlbums = await _localStorageService.getData(ALBUMS_CACHE_KEY);
+      if (cachedAlbums != null) {
+        return List<Map<String, dynamic>>.from(cachedAlbums);
+      }
+      
+      // If no cached albums, return downloaded albums
+      return await getDownloadedAlbums();
     }
   }
 
@@ -125,39 +137,46 @@ class MusicService {
       List<Map<String, dynamic>>? subsequentSongs}) async {
     if (currentSong != null && currentSong['id'] != null) {
       try {
-        // Check if song is downloaded
-        final decryptedData = await getDecryptedSongData(currentSong['id']);
-        if (decryptedData != null) {
-          // Create a temporary file with decrypted data for playback
-          final directory = await getTemporaryDirectory();
-          final tempFile = File('${directory.path}/temp_${currentSong['id']}.mp3');
-          await tempFile.writeAsBytes(decryptedData);
+        final metadata = await _localStorageService.getData('metadata_${currentSong['id']}');
+        if (metadata != null && metadata['secure_file'] != null) {
+          final filePath = await _getSecureFilePath(metadata['secure_file']);
+          final file = File(filePath);
+          
+          if (await file.exists()) {
+            // Decrypt the file
+            final encrypted = await file.readAsBytes();
+            final decrypted = _xorEncrypt(encrypted, currentSong['id']); // XOR is its own inverse
 
-          // Create playlist with current song
-          final playlist = ConcatenatingAudioSource(children: [
-            AudioSource.file(tempFile.path, tag: currentSong),
-          ]);
+            // Create temporary file for playback
+            final tempFile = await File('${(await getTemporaryDirectory()).path}/temp_${currentSong['id']}.mp3');
+            await tempFile.writeAsBytes(decrypted);
 
-          // Add subsequent songs
-          if (subsequentSongs != null) {
-            for (var song in subsequentSongs) {
-              if (song['audio_url'] != null) {
-                playlist.add(AudioSource.uri(
-                  Uri.parse(song['audio_url']),
-                  tag: song,
-                ));
+            // Create playlist and play
+            final playlist = ConcatenatingAudioSource(children: [
+              AudioSource.file(tempFile.path, tag: currentSong),
+            ]);
+
+            // Add subsequent songs...
+            if (subsequentSongs != null) {
+              for (var song in subsequentSongs) {
+                if (song['audio_url'] != null) {
+                  playlist.add(AudioSource.uri(
+                    Uri.parse(song['audio_url']),
+                    tag: song,
+                  ));
+                }
               }
             }
+
+            await _audioPlayer.setAudioSource(playlist);
+            _playlist = playlist;
+            await _audioPlayer.play();
+            _updateQueueStream();
+
+            // Delete temp file after playback starts
+            tempFile.delete().catchError((e) => print('Error deleting temp file: $e'));
+            return;
           }
-
-          await _audioPlayer.setAudioSource(playlist);
-          _playlist = playlist;
-          await _audioPlayer.play();
-          _updateQueueStream();
-
-          // Delete temp file after playback starts
-          tempFile.delete().catchError((e) => print('Error deleting temp file: $e'));
-          return;
         }
       } catch (e) {
         print('Error playing local file: $e');
@@ -375,16 +394,39 @@ class MusicService {
   }
 
   Future<List<Map<String, dynamic>>> getAlbumSongs(String albumId) async {
+    final cacheKey = 'album_songs_$albumId';
+    
     try {
+      // Try to fetch from network
       final response = await Supabase.instance.client
           .from('songs')
           .select()
           .eq('album_id', albumId)
           .order('track_number');
 
-      return List<Map<String, dynamic>>.from(response as List);
+      final songs = List<Map<String, dynamic>>.from(response as List);
+      
+      // Cache the results
+      await _localStorageService.saveData(cacheKey, songs);
+      
+      return songs;
     } catch (e) {
-      throw Exception('Failed to fetch album songs: $e');
+      print('Error fetching album songs from network: $e');
+      
+      // If network fetch fails, try to get from cache
+      final cachedSongs = await _localStorageService.getData(cacheKey);
+      if (cachedSongs != null) {
+        return List<Map<String, dynamic>>.from(cachedSongs);
+      }
+
+      // If no cache and no network, check if any songs are downloaded
+      final downloadedSongs = await getDownloadedSongsForAlbum(albumId);
+      if (downloadedSongs.isNotEmpty) {
+        return downloadedSongs;
+      }
+      
+      // If nothing is available, rethrow the error
+      rethrow;
     }
   }
 
@@ -667,67 +709,76 @@ class MusicService {
 
   Future<void> downloadSong(Map<String, dynamic> song) async {
     final songId = song['id'];
+    final albumId = song['album_id'];
 
     try {
       print('Starting download for song ID: $songId');
       
-      // Check if already downloaded
       if (await isSongDownloaded(songId)) {
         print('Song already downloaded: $songId');
         return;
       }
 
-      // Get audio URL from songs table
       final audioUrl = await _getAudioUrl(songId);
       if (audioUrl == null) {
         throw Exception('Could not find audio URL for song');
       }
 
-      // Download the audio file
       final bytes = await _downloadFromUrl(audioUrl);
       if (bytes == null || bytes.isEmpty) {
         throw Exception('Failed to download audio file');
       }
 
-      await _encryptedStorage.init();
+      // Save audio file with a randomized name
+      final secureFileName = '${DateTime.now().millisecondsSinceEpoch}_${Uri.encodeFull(songId)}.dat';
+      final filePath = await _getSecureFilePath(secureFileName);
+      
+      // Basic XOR encryption
+      final encryptedBytes = _xorEncrypt(bytes, songId);
+      await File(filePath).writeAsBytes(encryptedBytes);
 
-      // Save encrypted audio
-      await _encryptedStorage.encryptAndSave(
-        bytes,
-        'song_$songId',
-      );
+      // Save metadata with secure file reference
+      final metadata = {
+        ...song,
+        'downloaded_at': DateTime.now().toIso8601String(),
+        'secure_file': secureFileName,  // Store only filename, not full path
+      };
+      
+      await _localStorageService.saveData('metadata_$songId', metadata);
 
-      // Save metadata
-      final metadataFileName = 'metadata_$songId';
-      await _encryptedStorage.encryptAndSave(
-        utf8.encode(json.encode(song)),
-        metadataFileName,
-      );
+      // Save album metadata
+      if (albumId != null) {
+        await _localStorageService.saveAlbumMetadata(albumId, {
+          'id': albumId,
+          'title': song['album_title'],
+          'artist': song['artist'],
+          'image_url': song['image_url'],
+        });
+        await _localStorageService.addDownloadedAlbumId(albumId);
+      }
 
-      print('Successfully downloaded and encrypted song: $songId');
-    } catch (e, stackTrace) {
-      print('Detailed download error:');
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
+      await _updateDownloadedSongsList(metadata);
+      print('Successfully downloaded song: $songId');
+    } catch (e) {
+      print('Error downloading song: $e');
       throw Exception('Failed to download song: $e');
     }
   }
 
-  Future<bool> isSongDownloaded(String songId) async {
-    await _encryptedStorage.init();
-    return _encryptedStorage.isDownloaded('song_$songId');
+  // Simple XOR encryption/decryption
+  List<int> _xorEncrypt(List<int> data, String key) {
+    final keyBytes = utf8.encode(key);
+    final encrypted = List<int>.from(data);
+    for (var i = 0; i < encrypted.length; i++) {
+      encrypted[i] = encrypted[i] ^ keyBytes[i % keyBytes.length];
+    }
+    return encrypted;
   }
 
-  Future<List<int>?> getDecryptedSongData(String songId) async {
-    try {
-      await _encryptedStorage.init();
-      final directory = await getApplicationDocumentsDirectory();
-      final filePath = '${directory.path}/song_$songId.enc';
-      return await _encryptedStorage.decryptFile(filePath);
-    } catch (e) {
-      print('Error decrypting song data: $e');
-      return null;
-    }
+  Future<bool> isSongDownloaded(String songId) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/song_$songId.mp3');
+    return file.exists();
   }
 
   Future<List<int>?> _downloadFromStorage(String songId) async {
@@ -774,7 +825,13 @@ class MusicService {
   }
 
   Future<List<Map<String, dynamic>>> getDownloadedSongs() async {
-    return await _localStorageService.getDownloadedSongs();
+    try {
+      final saved = await _localStorageService.getData('downloaded_songs');
+      return List<Map<String, dynamic>>.from(saved ?? []);
+    } catch (e) {
+      print('Error getting downloaded songs: $e');
+      return [];
+    }
   }
 
   Future<List<Map<String, dynamic>>> getRecommendations() async {
@@ -892,5 +949,59 @@ class MusicService {
     } catch (e) {
       print('Error recording play history: $e');
     }
+  }
+
+  Future<List<Map<String, dynamic>>> getDownloadedSongsForAlbum(String albumId) async {
+    try {
+      final allDownloaded = await getDownloadedSongs();
+      return allDownloaded.where((song) => song['album_id'] == albumId).toList();
+    } catch (e) {
+      print('Error getting downloaded songs for album: $e');
+      return [];
+    }
+  }
+
+  Future<void> _updateDownloadedSongsList(Map<String, dynamic> songMetadata) async {
+    try {
+      final downloadedSongs = await getDownloadedSongs();
+      downloadedSongs.add(songMetadata);
+      await _localStorageService.saveData('downloaded_songs', downloadedSongs);
+    } catch (e) {
+      print('Error updating downloaded songs list: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getAlbumOffline(String albumId) async {
+    try {
+      return await _localStorageService.getAlbumMetadata(albumId);
+    } catch (e) {
+      print('Error getting offline album: $e');
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getDownloadedAlbums() async {
+    try {
+      final albumIds = await _localStorageService.getDownloadedAlbumIds();
+      final albums = <Map<String, dynamic>>[];
+      
+      for (final id in albumIds) {
+        final albumData = await _localStorageService.getAlbumMetadata(id);
+        if (albumData != null) {
+          albums.add(albumData);
+        }
+      }
+      
+      return albums;
+    } catch (e) {
+      print('Error getting downloaded albums: $e');
+      return [];
+    }
+  }
+
+  // Add this helper method
+  Future<String> _getSecureFilePath(String fileName) async {
+    final directory = await getApplicationSupportDirectory(); // More secure than getApplicationDocumentsDirectory
+    return '${directory.path}/$fileName';
   }
 }

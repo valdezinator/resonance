@@ -99,6 +99,7 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
+      // First try to get from network
       final newSongs = await _musicService.getQuickPlaySongs(
         offset: _currentPage * _pageSize,
         limit: _pageSize,
@@ -111,10 +112,14 @@ class _HomePageState extends State<HomePage> {
         _isLoadingMore = false;
       });
     } catch (e) {
+      // If network fails, load downloaded songs
+      final downloadedSongs = await _musicService.getDownloadedSongs();
+      
       setState(() {
+        _songs = downloadedSongs;
+        _hasMore = false;
         _isLoadingMore = false;
       });
-      // Handle error
     }
   }
 
@@ -172,10 +177,22 @@ class _HomePageState extends State<HomePage> {
                         });
                       },
                       musicService: _musicService,
+                      selectedIndex: _selectedIndex,  // Add this
+                      onIndexChanged: (index) {      // Add this
+                        setState(() {
+                          _selectedIndex = index;
+                        });
+                      },
                     )
                   : _selectedIndex == 2
                       ? LibraryPage(
+                          selectedIndex: _selectedIndex,  // Add this line
                           onNavigate: (index) {
+                            setState(() {
+                              _selectedIndex = index;
+                            });
+                          },
+                          onIndexChanged: (index) {
                             setState(() {
                               _selectedIndex = index;
                             });
@@ -190,6 +207,12 @@ class _HomePageState extends State<HomePage> {
                             });
                           },
                           musicService: _musicService,
+                          selectedIndex: _selectedIndex,  // Add this
+                          onIndexChanged: (index) {      // Add this
+                            setState(() {
+                              _selectedIndex = index;
+                            });
+                          },
                         )
                       : SingleChildScrollView(
                           child: Padding(
@@ -652,6 +675,12 @@ class _HomePageState extends State<HomePage> {
                 });
               },
               currentSong: currentSong,
+              selectedIndex: _selectedIndex,  // Add this
+              onIndexChanged: (index) {      // Add this
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
             ),
           ),
         );

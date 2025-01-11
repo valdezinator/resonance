@@ -6,9 +6,16 @@ import 'package:image_cropper/image_cropper.dart'; // Add this import
 import 'package:resonance/models/playlist.dart';
 
 class LibraryPage extends StatefulWidget {
-  final void Function(int) onNavigate;
-  
-  const LibraryPage({Key? key, required this.onNavigate}) : super(key: key);
+  final Function(int) onNavigate;
+  final int selectedIndex;
+  final Function(int) onIndexChanged;
+
+  const LibraryPage({
+    Key? key, 
+    required this.onNavigate,
+    required this.selectedIndex,        
+    required this.onIndexChanged,       
+  }) : super(key: key);
 
   @override
   State<LibraryPage> createState() => _LibraryPageState();
