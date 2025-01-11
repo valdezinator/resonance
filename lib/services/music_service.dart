@@ -1088,4 +1088,40 @@ class MusicService {
       return null;
     }
   }
+
+  Future<List<Map<String, dynamic>>> getUserPlaylists() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      
+      if (userId == null) {
+        throw Exception('User not logged in');
+      }
+
+      final response = await supabase
+          .from('playlist')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching playlists: $e');
+      return [];
+    }
+  }
+
+  Future<void> addSongToPlaylist(String playlistId, Map<String, dynamic> song) async {
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.from('playlist_songs').insert({
+        'playlist_id': playlistId,
+        'song_id': song['id'],
+        'added_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('Error adding song to playlist: $e');
+      throw Exception('Failed to add song to playlist');
+    }
+  }
 }

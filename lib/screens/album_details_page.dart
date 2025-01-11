@@ -7,6 +7,7 @@ import '../widgets/floating_player_mixin.dart';
 import 'dart:ui';
 import 'dart:io';
 import 'package:google_fonts/google_fonts.dart';
+import 'library_page.dart';
 
 class AlbumDetailsPage extends StatefulWidget {
   final Map<String, dynamic> album;
@@ -715,123 +716,333 @@ class _SongListView extends StatelessWidget {
     );
   }
 
+  void _showMoreOptions(BuildContext context, Map<String, dynamic> song) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.playlist_add, color: Colors.white),
+              title: Text(
+                'Add to Playlist',
+                style: GoogleFonts.lato(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showPlaylistSelector(context, song);
+              },
+            ),
+            // Add more options here
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPlaylistSelector(BuildContext context, Map<String, dynamic> song) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => PlaylistSelectorSheet(
+        song: song,
+        musicService: musicService,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SliverList(
       delegate: SliverChildBuilderDelegate(
         (context, index) {
           final song = songs[index];
-          return ListTile(
-            contentPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            leading: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 24,
-                  child: Text(
-                    '${index + 1}',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 16,
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.5),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: ListTile(
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      child: Text(
+                        '${index + 1}',
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
+                    SizedBox(width: 12),
+                    _buildSongImage(song),
+                  ],
+                ),
+                title: Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        song['title'],
+                        style: GoogleFonts.lato(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                      Text(
+                        song['artist'],
+                        style: GoogleFonts.lato(  // Changed this line
+                          color: Colors.grey[400],
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(width: 12),
-                _buildSongImage(song),
-              ],
-            ),
-            title: Padding(
-              padding: EdgeInsets.only(left: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    song['title'],
-                    style: GoogleFonts.lato(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                subtitle: null,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildDownloadButton(context, song),
+                    Text(
+                      song['duration'] ?? '0:00',
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 14,
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                  Text(
-                    song['artist'],
-                    style: GoogleFonts.lato(  // Changed this line
-                      color: Colors.grey[400],
-                      fontSize: 14,
+                    IconButton(
+                      icon: Icon(
+                        Icons.more_vert,
+                        color: Colors.grey[400],
+                      ),
+                      onPressed: () => _showMoreOptions(context, song),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ],
+                  ],
+                ),
+                onTap: () async {
+                  try {
+                    final audioUrl = song['audio_url'];
+                    if (audioUrl == null || audioUrl.isEmpty) {
+                      throw Exception('Song URL is missing');
+                    }
+
+                    final songData = {
+                      ...song,
+                      'id': song['id'],
+                      // Use song's image_url if available, fallback to album image
+                      'image_url': song['image_url'] ?? album['image_url'],
+                      'title': song['title'] ?? 'Unknown Title',
+                      'artist': song['artist'] ?? 'Unknown Artist',
+                      'audio_url': audioUrl,
+                    };
+
+                    // Get subsequent songs
+                    final subsequentSongs = songs
+                        .skip(index + 1)
+                        .map((s) => {
+                              ...s,
+                              // Only use album image as fallback
+                              'image_url': s['image_url'] ?? album['image_url'],
+                            })
+                        .toList();
+
+                    // Update local state first
+                    onLocalSongUpdate(songData);
+
+                    // Then update parent state
+                    onSongPlay(songData);
+
+                    // Finally play the song with subsequent songs in queue
+                    await musicService.playSong(
+                      audioUrl,
+                      currentSong: songData,
+                      subsequentSongs: subsequentSongs,
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to play song: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
               ),
             ),
-            subtitle: null,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDownloadButton(context, song),
-                Text(
-                  song['duration'] ?? '0:00',
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-            onTap: () async {
-              try {
-                final audioUrl = song['audio_url'];
-                if (audioUrl == null || audioUrl.isEmpty) {
-                  throw Exception('Song URL is missing');
-                }
-
-                final songData = {
-                  ...song,
-                  'id': song['id'],
-                  // Use song's image_url if available, fallback to album image
-                  'image_url': song['image_url'] ?? album['image_url'],
-                  'title': song['title'] ?? 'Unknown Title',
-                  'artist': song['artist'] ?? 'Unknown Artist',
-                  'audio_url': audioUrl,
-                };
-
-                // Get subsequent songs
-                final subsequentSongs = songs
-                    .skip(index + 1)
-                    .map((s) => {
-                          ...s,
-                          // Only use album image as fallback
-                          'image_url': s['image_url'] ?? album['image_url'],
-                        })
-                    .toList();
-
-                // Update local state first
-                onLocalSongUpdate(songData);
-
-                // Then update parent state
-                onSongPlay(songData);
-
-                // Finally play the song with subsequent songs in queue
-                await musicService.playSong(
-                  audioUrl,
-                  currentSong: songData,
-                  subsequentSongs: subsequentSongs,
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Failed to play song: ${e.toString()}'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
           );
         },
         childCount: songs.length,
+      ),
+    );
+  }
+}
+
+class PlaylistSelectorSheet extends StatefulWidget {
+  final Map<String, dynamic> song;
+  final MusicService musicService;
+
+  const PlaylistSelectorSheet({
+    Key? key,
+    required this.song,
+    required this.musicService,
+  }) : super(key: key);
+
+  @override
+  State<PlaylistSelectorSheet> createState() => _PlaylistSelectorSheetState();
+}
+
+class _PlaylistSelectorSheetState extends State<PlaylistSelectorSheet> {
+  late Future<List<Map<String, dynamic>>> _playlistsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _playlistsFuture = widget.musicService.getUserPlaylists();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'Add to Playlist',
+              style: GoogleFonts.lato(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          ListTile(
+            leading: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.green,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.add, color: Colors.white),
+            ),
+            title: Text(
+              'Create New Playlist',
+              style: GoogleFonts.lato(color: Colors.white),
+            ),
+            onTap: () async {
+              Navigator.pop(context);
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CreatePlaylistScreen(),
+                ),
+              );
+              if (result == true) {
+                // Refresh playlists
+                setState(() {
+                  _playlistsFuture = widget.musicService.getUserPlaylists();
+                });
+              }
+            },
+          ),
+          Divider(color: Colors.grey[800]),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _playlistsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    'No playlists found',
+                    style: GoogleFonts.lato(color: Colors.grey),
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: snapshot.data!.length,
+                itemBuilder: (context, index) {
+                  final playlist = snapshot.data![index];
+                  return ListTile(
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        image: playlist['image_url'] != null
+                            ? DecorationImage(
+                                image: NetworkImage(playlist['image_url']),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: playlist['image_url'] == null
+                          ? Icon(Icons.music_note, color: Colors.grey)
+                          : null,
+                    ),
+                    title: Text(
+                      playlist['playlist_name'],
+                      style: GoogleFonts.lato(color: Colors.white),
+                    ),
+                    onTap: () async {
+                      try {
+                        await widget.musicService.addSongToPlaylist(
+                          playlist['id'],
+                          widget.song,
+                        );
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Added to ${playlist['playlist_name']}'),
+                          ),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to add song: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                  );
+                },
+              );
+            },
+          ),
+          SizedBox(height: 16),
+        ],
       ),
     );
   }
