@@ -4,6 +4,9 @@ import 'local_storage_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'encrypted_storage_service.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'dart:convert';
 
 class MusicService {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -120,51 +123,77 @@ class MusicService {
       {Map<String, dynamic>? currentSong,
       Map<String, dynamic>? nextSong,
       List<Map<String, dynamic>>? subsequentSongs}) async {
+    if (currentSong != null && currentSong['id'] != null) {
+      try {
+        // Check if song is downloaded
+        final decryptedData = await getDecryptedSongData(currentSong['id']);
+        if (decryptedData != null) {
+          // Create a temporary file with decrypted data for playback
+          final directory = await getTemporaryDirectory();
+          final tempFile = File('${directory.path}/temp_${currentSong['id']}.mp3');
+          await tempFile.writeAsBytes(decryptedData);
+
+          // Create playlist with current song
+          final playlist = ConcatenatingAudioSource(children: [
+            AudioSource.file(tempFile.path, tag: currentSong),
+          ]);
+
+          // Add subsequent songs
+          if (subsequentSongs != null) {
+            for (var song in subsequentSongs) {
+              if (song['audio_url'] != null) {
+                playlist.add(AudioSource.uri(
+                  Uri.parse(song['audio_url']),
+                  tag: song,
+                ));
+              }
+            }
+          }
+
+          await _audioPlayer.setAudioSource(playlist);
+          _playlist = playlist;
+          await _audioPlayer.play();
+          _updateQueueStream();
+
+          // Delete temp file after playback starts
+          tempFile.delete().catchError((e) => print('Error deleting temp file: $e'));
+          return;
+        }
+      } catch (e) {
+        print('Error playing local file: $e');
+      }
+    }
+
+    // Fall back to streaming if no local file exists or if there's an error
     try {
-      // Create playlist with current song
       final playlist = ConcatenatingAudioSource(children: [
         AudioSource.uri(
-          Uri.parse(currentSong?['audio_url'] ?? url),
-          tag: currentSong ?? {'audio_url': url},  // Make sure we pass the full song data
+          Uri.parse(url),
+          tag: currentSong ?? {'audio_url': url},
         ),
       ]);
 
-      // Add all subsequent songs to playlist
       if (subsequentSongs != null) {
         for (var song in subsequentSongs) {
           if (song['audio_url'] != null) {
-            playlist.add(
-              AudioSource.uri(
-                Uri.parse(song['audio_url']),
-                tag: song,  // Pass the complete song data as tag
-              ),
-            );
+            playlist.add(AudioSource.uri(
+              Uri.parse(song['audio_url']),
+              tag: song,
+            ));
           }
         }
       }
 
-      await _audioPlayer.setAudioSource(
-        playlist,
-        preload: true,
-        initialPosition: Duration.zero,
-        initialIndex: 0,
-      );
-
+      await _audioPlayer.setAudioSource(playlist);
       _playlist = playlist;
       await _audioPlayer.play();
       _updateQueueStream();
-
-      // Record play history immediately after starting playback
-      if (currentSong != null) {
-        await _recordPlayHistory(currentSong);
-      }
     } catch (e) {
-      print('Error playing song: $e');
-      rethrow;
+      print('Error streaming song: $e');
+      throw Exception('Failed to play song: $e');
     }
   }
 
-  //
   Future<void> addTopHit(String songId, String artistId, int rank) async {
     try {
       await _supabase.from('top_hits').insert({
@@ -245,7 +274,6 @@ class MusicService {
     }
   }
 
-// Add this method for incrementing play count
   Future<void> incrementTopHitPlayCount(String songId, String artistId) async {
     try {
       // First, find the top_hit record
@@ -280,18 +308,6 @@ class MusicService {
       throw Exception('Failed to fetch artist details: $e');
     }
   }
-
-  // Method to increment play count for a top hit
-  // Future<void> incrementTopHitPlayCount(String songId, String artistId) async {
-  //   try {
-  //     await _supabase.rpc('increment_top_hit_play_count', params: {
-  //       'song_id': songId,
-  //       'artist_id': artistId,
-  //     });
-  //   } catch (e) {
-  //     print('Error incrementing play count: $e');
-  //   }
-  // }
 
   void _updateQueueStream() {
     try {
@@ -609,60 +625,152 @@ class MusicService {
     });
   }
 
-  Future<void> downloadSong(Map<String, dynamic> song) async {
+  Future<String?> _getAudioUrl(String songId) async {
     try {
-      // Validate required fields
-      if (song['id'] == null || song['audio_url'] == null) {
-        throw Exception('Invalid song data: missing id or audio_url');
-      }
+      final songData = await _supabase
+          .from('songs')
+          .select('audio_url')
+          .eq('id', songId)
+          .single();
 
+      print('Song data from DB: $songData');
+      final audioUrl = songData['audio_url'];
+      
+      if (audioUrl != null && audioUrl.isNotEmpty) {
+        print('Found audio_url in DB: $audioUrl');
+        return audioUrl;
+      }
+      return null;
+    } catch (e) {
+      print('Error getting audio URL: $e');
+      return null;
+    }
+  }
+
+  Future<List<int>?> _downloadFromUrl(String url) async {
+    try {
+      print('Attempting to download from URL: $url');
+      final response = await http.get(Uri.parse(url));
+      
+      if (response.statusCode == 200) {
+        print('Successfully downloaded ${response.bodyBytes.length} bytes');
+        return response.bodyBytes;
+      } else {
+        print('Download failed with status: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('Error downloading from URL: $e');
+      return null;
+    }
+  }
+
+  Future<void> downloadSong(Map<String, dynamic> song) async {
+    final songId = song['id'];
+
+    try {
+      print('Starting download for song ID: $songId');
+      
       // Check if already downloaded
-      final isDownloaded = await isSongDownloaded(song['id']);
-      if (isDownloaded) {
-        throw Exception('Song already downloaded');
+      if (await isSongDownloaded(songId)) {
+        print('Song already downloaded: $songId');
+        return;
       }
 
-      // Download audio file
-      final response = await http.get(Uri.parse(song['audio_url']));
-      if (response.statusCode != 200) {
-        throw Exception('Failed to download song: HTTP ${response.statusCode}');
+      // Get audio URL from songs table
+      final audioUrl = await _getAudioUrl(songId);
+      if (audioUrl == null) {
+        throw Exception('Could not find audio URL for song');
       }
 
-      // Encrypt and save
-      final fileName = 'song_${song['id']}';
-      final filePath = await _encryptedStorage.encryptAndSave(
-        response.bodyBytes,
-        fileName,
+      // Download the audio file
+      final bytes = await _downloadFromUrl(audioUrl);
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Failed to download audio file');
+      }
+
+      await _encryptedStorage.init();
+
+      // Save encrypted audio
+      await _encryptedStorage.encryptAndSave(
+        bytes,
+        'song_$songId',
       );
 
-      // Prepare metadata
-      final metadata = {
-        'user_id': _supabase.auth.currentUser?.id,
-        'song_id': song['id'],
-        'file_path': filePath,
-        'title': song['title'] ?? 'Unknown Title',
-        'artist': song['artist'] ?? 'Unknown Artist',
-        'image_url': song['image_url'],
-        'downloaded_at': DateTime.now().toIso8601String(),
-      };
+      // Save metadata
+      final metadataFileName = 'metadata_$songId';
+      await _encryptedStorage.encryptAndSave(
+        utf8.encode(json.encode(song)),
+        metadataFileName,
+      );
 
-      // Save metadata to Supabase
-      final result = await _supabase.from('downloaded_songs').upsert(metadata);
-      
-      if (result == null) {
-        throw Exception('Failed to save download metadata');
-      }
-
-    } catch (e) {
-      print('Error downloading song: $e');
-      // Clean up downloaded file if metadata save fails
-      // You might want to add cleanup code here
-      rethrow;
+      print('Successfully downloaded and encrypted song: $songId');
+    } catch (e, stackTrace) {
+      print('Detailed download error:');
+      print('Error: $e');
+      print('Stack trace: $stackTrace');
+      throw Exception('Failed to download song: $e');
     }
   }
 
   Future<bool> isSongDownloaded(String songId) async {
-    return await _encryptedStorage.isDownloaded('song_$songId');
+    await _encryptedStorage.init();
+    return _encryptedStorage.isDownloaded('song_$songId');
+  }
+
+  Future<List<int>?> getDecryptedSongData(String songId) async {
+    try {
+      await _encryptedStorage.init();
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/song_$songId.enc';
+      return await _encryptedStorage.decryptFile(filePath);
+    } catch (e) {
+      print('Error decrypting song data: $e');
+      return null;
+    }
+  }
+
+  Future<List<int>?> _downloadFromStorage(String songId) async {
+    try {
+      print('Starting download process for song ID: $songId');
+      
+      // First verify the file exists
+      final fileExists = await _supabase.storage
+          .from('songs')
+          .list(path: '')
+          .then((files) => files.any((file) => file.name == '$songId.mp3'));
+
+      if (!fileExists) {
+        print('File $songId.mp3 not found in storage bucket');
+        return null;
+      }
+
+      print('File found in storage, attempting download');
+      
+      // Try to download the file
+      final bytes = await _supabase.storage
+          .from('songs')
+          .download('$songId.mp3');
+
+      if (bytes.isEmpty) {
+        print('Downloaded file is empty');
+        return null;
+      }
+
+      print('Successfully downloaded ${bytes.length} bytes');
+      return bytes;
+    } catch (e, stackTrace) {
+      print('Storage download error:');
+      print('Error: $e');
+      print('Stack trace: $stackTrace');
+      
+      // Additional error info
+      if (e is StorageException) {
+        print('Storage error details: ${e.message}');
+        print('Storage error status: ${e.statusCode}');
+      }
+      return null;
+    }
   }
 
   Future<List<Map<String, dynamic>>> getDownloadedSongs() async {

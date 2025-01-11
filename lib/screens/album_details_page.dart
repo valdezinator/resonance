@@ -442,14 +442,30 @@ class _SongListView extends StatelessWidget {
           ),
           onPressed: isDownloaded ? null : () async {
             try {
-              await musicService.downloadSong(song);
+              // Show download progress
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Downloading song...')),
+              );
+
+              // Download song with complete metadata
+              final songToDownload = {
+                ...song,
+                'image_url': album['image_url'],
+                'album_title': album['title'],
+              };
+              
+              await musicService.downloadSong(songToDownload);
+
+              // Force rebuild of the widget to update download status
+              (context as Element).markNeedsBuild();
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Song downloaded successfully')),
               );
             } catch (e) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Failed to download song: $e'),
+                  content: Text('Failed to download song: ${e.toString()}'),
                   backgroundColor: Colors.red,
                 ),
               );

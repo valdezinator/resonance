@@ -51,6 +51,7 @@ dependencies:
   path_provider: ^2.1.5
   shared_preferences: ^2.3.3
   supabase_flutter: ^2.8.1
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_lints: ^5.0.0
