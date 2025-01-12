@@ -82,10 +82,27 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
     return Stack(
       children: [
         Scaffold(
-          // backgroundColor: Colors.black,
-          backgroundColor: const Color(0xFF0C0F14),
+          backgroundColor: Colors.transparent, // Changed from solid color
           body: Stack(
             children: [
+              // Add gradient background
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF8B0000).withOpacity(0.7), // Dark red
+                      Color(0xFFFF4500).withOpacity(0.5), // Orange-red
+                      Color(0xFF4B0082).withOpacity(0.6), // Indigo/Purple
+                      Color(0xFF000080).withOpacity(0.7), // Navy blue
+                      Color(0xFF006400).withOpacity(0.5), // Dark green
+                    ],
+                    stops: [0.0, 0.25, 0.5, 0.75, 1.0],
+                  ),
+                ),
+              ),
+              // Existing CustomScrollView
               CustomScrollView(
                 slivers: [
                   SliverAppBar(
