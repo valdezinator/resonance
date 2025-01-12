@@ -530,7 +530,14 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
               unselectedItemColor: Colors.grey.withOpacity(0.6),
               currentIndex: widget.selectedIndex,
               type: BottomNavigationBarType.fixed,
-              onTap: widget.onIndexChanged,
+              onTap: (index) {
+                // First notify parent of index change
+                widget.onIndexChanged(index);
+                // Then pop back to parent if index is different
+                if (index != widget.selectedIndex) {
+                  Navigator.of(context).pop();
+                }
+              },
               items: [
                 BottomNavigationBarItem(
                   icon: SvgPicture.asset(

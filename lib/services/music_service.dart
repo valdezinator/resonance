@@ -34,6 +34,21 @@ class MusicService {
   static const String DOWNLOAD_STATE_KEY = 'download_state';
   static const String DOWNLOAD_PROGRESS_KEY = 'download_progress';
 
+  // Add these properties
+  // Replace 192.168.1.xxx with your actual IP address
+  final String _pythonApiBaseUrl = 'http://192.168.29.10:8000';  // For physical device
+  // OR
+  // final String _pythonApiBaseUrl = 'http://10.0.2.2:8000';  // For Android emulator
+
+  // Add getter for current user ID
+  String get _userId {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      throw Exception('User not authenticated');
+    }
+    return userId;
+  }
+
   MusicService() {
     _playlist = ConcatenatingAudioSource(children: []);
   }
@@ -226,6 +241,30 @@ class MusicService {
       } else {
         throw Exception('No playable audio sources found');
       }
+
+      // Track the play in Python backend
+      if (currentSong != null) {
+        try {
+          final response = await http.post(
+            Uri.parse('$_pythonApiBaseUrl/track-play'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({
+              'song_id': currentSong['id'],
+              'user_id': _userId,
+              'title': currentSong['title'],
+              'artist': currentSong['artist'],
+              'image_url': currentSong['image_url'],
+              'audio_url': currentSong['audio_url'],
+            }),
+          );
+          
+          if (response.statusCode != 200) {
+            print('Failed to track song play: ${response.body}');
+          }
+        } catch (e) {
+          print('Error tracking song play: $e');
+        }
+      }
     } catch (e) {
       print('Error playing song: $e');
       throw Exception('Failed to play song: $e');
@@ -396,6 +435,29 @@ class MusicService {
     }
   }
 
+  Future<Map<String, dynamic>> getArtistPage(String artistName) async {
+    try {
+      print('Fetching artist page for: $artistName'); // Debug log
+      
+      final response = await _supabase
+          .from('artist_page')
+          .select()
+          .eq('artist_name', artistName)
+          .single();
+      
+      print('Artist page data: $response'); // Debug log
+      
+      if (response == null) {
+        throw Exception('No artist page found for: $artistName');
+      }
+      
+      return response;
+    } catch (e) {
+      print('Error fetching artist page: $e');
+      throw Exception('Failed to fetch artist page: $e');
+    }
+  }
+
   void _updateQueueStream() {
     try {
       final currentQueue = _playlist.sequence
@@ -529,28 +591,19 @@ class MusicService {
 
   Future<List<Map<String, dynamic>>> getRecentlyPlayed() async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return [];
+      final response = await http.get(
+        Uri.parse('$_pythonApiBaseUrl/recently-played/$_userId'),
+      );
 
-      final response = await _supabase
-          .from('listening_history')
-          .select('''
-            *,
-            songs:song_id (
-              id,
-              title,
-              artist,
-              image_url,
-              audio_url
-            )
-          ''')
-          .eq('user_id', userId)
-          .order('played_at', ascending: false)
-          .limit(10);
-
-      return List<Map<String, dynamic>>.from(response);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return List<Map<String, dynamic>>.from(data);
+      } else {
+        throw Exception('Failed to load recently played songs');
+      }
     } catch (e) {
-      print('Error fetching recently played: $e');
+      print('Error getting recently played songs: $e');
+      // Fallback to existing implementation or return empty list
       return [];
     }
   }

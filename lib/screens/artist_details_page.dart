@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/music_service.dart';
 import '../widgets/bottom_player.dart';
 import '../widgets/floating_player_mixin.dart';
@@ -29,6 +30,46 @@ class ArtistDetailsPage extends StatefulWidget {
 
 class _ArtistDetailsPageState extends State<ArtistDetailsPage>
     with FloatingPlayerMixin {
+  Map<String, dynamic>? artistData;
+  bool showFullDetails = false;
+
+  @override
+  void initState() {
+    super.initState();
+    print('Artist data from recommended_artists: ${widget.artist}'); // Debug log
+    loadArtistData();
+  }
+
+  Future<void> loadArtistData() async {
+    try {
+      // Use the artist name from the recommended_artists table
+      final artistName = widget.artist['artist']; // This is the field name in recommended_artists
+      print('Looking up artist details for: $artistName'); // Debug log
+      
+      final response = await widget.musicService.getArtistPage(artistName);
+      print('Found artist page data: $response'); // Debug log
+      
+      // Ensure artist_details length check is done safely
+      final artistDetails = response['artist_details'] as String?;
+      final hasDetails = artistDetails != null && artistDetails.isNotEmpty;
+      
+      setState(() {
+        artistData = {
+          ...response,
+          'artist_details_length': hasDetails ? artistDetails!.length : 0,
+        };
+      });
+    } catch (e) {
+      print('Error loading artist data: $e');
+    }
+  }
+
+  void _showFullDetails() {
+    setState(() {
+      showFullDetails = true;
+    });
+  }
+
   String formatDuration(int seconds) {
     final duration = Duration(seconds: seconds);
     final minutes = duration.inMinutes;
@@ -38,383 +79,350 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          CustomScrollView(
-            slivers: [
-              SliverAppBar(
-                backgroundColor: Colors.transparent,
-                expandedHeight: 300,
-                pinned: true,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.red.withOpacity(0.6),
-                          Colors.black,
-                        ],
+    return Stack(
+      children: [
+        Scaffold(
+          // backgroundColor: Colors.black,
+          backgroundColor: const Color(0xFF0C0F14),
+          body: Stack(
+            children: [
+              CustomScrollView(
+                slivers: [
+                  SliverAppBar(
+                    backgroundColor: Colors.transparent,
+                    expandedHeight: 250, // Adjusted for perfect balance
+                    pinned: true,
+                    leading: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: SvgPicture.asset('assets/icons/back_button.svg'),
                       ),
                     ),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Positioned(
-                          top: 60,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: widget.artist['image_url'] != null
-                                ? Image.network(
-                                    widget.artist['image_url'],
-                                    height: 200,
-                                    width: 200,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Container(
-                                    height: 200,
-                                    width: 200,
-                                    color: Colors.grey[800],
-                                    child: Icon(
-                                      Icons.person,
-                                      size: 100,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 20,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Text(
-                              widget.artist['artist'] ?? 'Unknown Artist',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'Top Hits',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    title: Text(
+                      artistData?['artist_name'] ?? 'Loading...',
+                      style: GoogleFonts.raleway(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
-                    FutureBuilder<List<Map<String, dynamic>>>(
-                      future: widget.musicService
-                          .getArtistTopHits(widget.artist['id']),
-                      builder: (context, snapshot) {
-                        print(
-                            'FutureBuilder state: ${snapshot.connectionState}');
-                        print('FutureBuilder error: ${snapshot.error}');
-                        print('FutureBuilder data: ${snapshot.data}');
-
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return Center(child: CircularProgressIndicator());
-                        }
-
-                        if (snapshot.hasError) {
-                          return Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text(
-                              'Error loading songs: ${snapshot.error}',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          );
-                        }
-
-                        final songs = snapshot.data ?? [];
-                        if (songs.isEmpty) {
-                          return Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text(
-                              'No songs found',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          );
-                        }
-
-                        return ListView.builder(
-                          shrinkWrap: true,
-                          physics: NeverScrollableScrollPhysics(),
-                          itemCount: songs.length,
-                          itemBuilder: (context, index) {
-                            final song = songs[index];
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0,
-                                vertical: 8.0,
-                              ),
-                              child: InkWell(
-                                onTap: () async {
-                                  try {
-                                    widget.onSongPlay(song);
-                                    await widget.musicService.playSong(
-                                      song['audio_url'] ?? '',
-                                      currentSong: song,
-                                    );
-                                    await widget.musicService
-                                        .incrementTopHitPlayCount(
-                                      song['id'],
-                                      widget.artist['id'],
-                                    );
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content:
-                                            Text('Failed to play song: $e'),
-                                        backgroundColor: Colors.red,
+                    centerTitle: true,
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 110, 20, 20), // Adjusted top padding
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Artist Image
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(5),
+                              child: artistData?['artist_image_url'] != null
+                                  ? SizedBox(
+                                      width: 130, // Perfect width for this height
+                                      height: 160, // Standard height for artist image
+                                      child: Image.network(
+                                        artistData!['artist_image_url'],
+                                        fit: BoxFit.cover, // Changed to cover for better image fitting
                                       ),
-                                    );
-                                  }
-                                },
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      '${index + 1}',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
+                                    )
+                                  : Container(
+                                      width: 130,
+                                      height: 160,
+                                      color: Colors.grey[800],
+                                    ),
+                            ),
+                            SizedBox(width: 16),
+                            // Artist Details
+                            Expanded(
+                              child: Container(
+                                height: 160, // Match image height
+                                padding: EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        artistData?['artist_details'] ?? '',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 14,
+                                        ),
+                                        maxLines: 6, // Increased from 4 to 6 to show more text
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
-                                    SizedBox(width: 16),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(4),
-                                      child: song['image_url'] != null
-                                          ? Image.network(
-                                              song['image_url'],
-                                              width: 48,
-                                              height: 48,
-                                              fit: BoxFit.cover,
-                                            )
-                                          : Container(
-                                              width: 48,
-                                              height: 48,
-                                              color: Colors.grey[800],
-                                              child: Icon(
-                                                Icons.music_note,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                    ),
-                                    SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            song['title'] ?? 'Unknown Title',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                            ),
+                                      if ((artistData?['artist_details'] ?? '').isNotEmpty)
+                                        TextButton(
+                                          onPressed: _showFullDetails,
+                                          style: TextButton.styleFrom(
+                                            padding: EdgeInsets.zero,
+                                            minimumSize: Size(50, 20),
+                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                           ),
-                                          Text(
-                                            song['duration'] ?? '0:00',
+                                          child: Text(
+                                            'Read More',
                                             style: TextStyle(
-                                              color: Colors.grey,
+                                              color: Colors.blue,
                                               fontSize: 14,
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                    ),
-                                    Text(
-                                      '${song['play_count'] ?? 0} plays',
-                                      style: TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.more_vert,
-                                        color: Colors.white,
-                                      ),
-                                      onPressed: () {
-                                        showModalBottomSheet(
-                                          context: context,
-                                          backgroundColor: Colors.grey[900],
-                                          builder: (context) => Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              ListTile(
-                                                leading: Icon(
-                                                    Icons.playlist_add,
-                                                    color: Colors.white),
-                                                title: Text('Add to playlist',
-                                                    style: TextStyle(
-                                                        color: Colors.white)),
-                                                onTap: () {
-                                                  Navigator.pop(context);
-                                                },
-                                              ),
-                                              ListTile(
-                                                leading: Icon(
-                                                    Icons.favorite_border,
-                                                    color: Colors.white),
-                                                title: Text('Like',
-                                                    style: TextStyle(
-                                                        color: Colors.white)),
-                                                onTap: () async {
-                                                  await widget.musicService
-                                                      .likeSong(song['id']);
-                                                  Navigator.pop(context);
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Top albums',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
                             ),
-                          ),
-                          SizedBox(height: 16),
-                          SizedBox(
-                            height: 150,
-                            child: ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: 5,
-                              itemBuilder: (context, index) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 16.0),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Container(
-                                      width: 150,
-                                      color: Colors.grey[800],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Latest Release Section
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                          child: Text(
+                            'Latest Release',
+                            style: GoogleFonts.raleway(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        if (artistData != null)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Album Image
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(5),
+                                  child: artistData?['latest_release_album_image_url'] != null
+                                    ? Image.network(
+                                        artistData!['latest_release_album_image_url'],
+                                        width: 70,
+                                        height: 70,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Container(
+                                        width: 70,
+                                        height: 70,
+                                        color: Colors.grey[800],
+                                      ),
+                                ),
+                                SizedBox(width: 16),
+                                // Release Details
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        artistData?['latest_release'] ?? 'Release date unavailable',
+                                        style: GoogleFonts.lato(
+                                          color: Colors.white70,
+                                          fontSize: 12, // Reduced from 14
+                                        ),
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        artistData?['latest_release_album_url'] ?? 'Album name unavailable',
+                                        style: GoogleFonts.lato(
+                                          color: Colors.white,
+                                          fontSize: 18, // Increased from 16
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        '${artistData?['latest_release_number_of_songs'] ?? 0} songs',
+                                        style: GoogleFonts.lato(
+                                          color: Colors.white70,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Text(
+                            'Top Songs',
+                            style: GoogleFonts.raleway(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        // Top Songs list will be added here
+                        Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Text(
+                            'Albums',
+                            style: GoogleFonts.raleway(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        // Albums grid will be added here
+                        SizedBox(height: 100), // Space for bottom player
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              buildFloatingBottomPlayer(
+                currentSong: widget.currentSong,
+                musicService: widget.musicService,
+                onSongPlay: widget.onSongPlay,
+              ),
+            ],
+          ),
+          bottomNavigationBar: ClipRRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+              child: Container(
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  border: Border(
+                    top: BorderSide(
+                      color: Colors.white.withOpacity(0.2),
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                child: BottomNavigationBar(
+                  elevation: 0,
+                  backgroundColor: Colors.transparent,
+                  selectedItemColor: Colors.white,
+                  unselectedItemColor: Colors.grey.withOpacity(0.6),
+                  currentIndex: widget.selectedIndex,
+                  type: BottomNavigationBarType.fixed,
+                  onTap: widget.onIndexChanged,
+                  items: [
+                    BottomNavigationBarItem(
+                      icon: SvgPicture.asset(
+                        'assets/icons/home_icon.svg',
+                        colorFilter: ColorFilter.mode(
+                          widget.selectedIndex == 0 ? Colors.white : Colors.grey,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                      label: 'Home',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: SvgPicture.asset(
+                        'assets/icons/search_icon.svg',
+                        colorFilter: ColorFilter.mode(
+                          widget.selectedIndex == 1 ? Colors.white : Colors.grey,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                      label: 'Search',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: SvgPicture.asset(
+                        'assets/icons/library_icon.svg',
+                        colorFilter: ColorFilter.mode(
+                          widget.selectedIndex == 2 ? Colors.white : Colors.grey,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                      label: 'Library',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: SvgPicture.asset(
+                        'assets/icons/profile_icon.svg',
+                        colorFilter: ColorFilter.mode(
+                          widget.selectedIndex == 3 ? Colors.white : Colors.grey,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                      label: 'Profile',
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-          buildFloatingBottomPlayer(
-            currentSong: widget.currentSong,
-            musicService: widget.musicService,
-            onSongPlay: widget.onSongPlay,
-          ),
-        ],
-      ),
-      bottomNavigationBar: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-          child: Container(
-            height: 80,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              border: Border(
-                top: BorderSide(
-                  color: Colors.white.withOpacity(0.2),
-                  width: 0.5,
-                ),
-              ),
-            ),
-            child: BottomNavigationBar(
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              selectedItemColor: Colors.white,
-              unselectedItemColor: Colors.grey.withOpacity(0.6),
-              currentIndex: widget.selectedIndex,
-              type: BottomNavigationBarType.fixed,
-              onTap: widget.onIndexChanged,
-              items: [
-                BottomNavigationBarItem(
-                  icon: SvgPicture.asset(
-                    'assets/icons/home_icon.svg',
-                    colorFilter: ColorFilter.mode(
-                      widget.selectedIndex == 0 ? Colors.white : Colors.grey,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  label: 'Home',
-                ),
-                BottomNavigationBarItem(
-                  icon: SvgPicture.asset(
-                    'assets/icons/search_icon.svg',
-                    colorFilter: ColorFilter.mode(
-                      widget.selectedIndex == 1 ? Colors.white : Colors.grey,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  label: 'Search',
-                ),
-                BottomNavigationBarItem(
-                  icon: SvgPicture.asset(
-                    'assets/icons/library_icon.svg',
-                    colorFilter: ColorFilter.mode(
-                      widget.selectedIndex == 2 ? Colors.white : Colors.grey,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  label: 'Library',
-                ),
-                BottomNavigationBarItem(
-                  icon: SvgPicture.asset(
-                    'assets/icons/profile_icon.svg',
-                    colorFilter: ColorFilter.mode(
-                      widget.selectedIndex == 3 ? Colors.white : Colors.grey,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  label: 'Profile',
-                ),
-              ],
             ),
           ),
         ),
-      ),
+        
+        // Full Details Overlay
+        if (showFullDetails)
+          GestureDetector(
+            onTap: () => setState(() => showFullDetails = false),
+            child: Container(
+              color: Colors.black.withOpacity(0.9),
+              child: Center(
+                child: Container(
+                  margin: EdgeInsets.all(32),
+                  padding: EdgeInsets.all(24),
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.7,
+                    maxWidth: MediaQuery.of(context).size.width * 0.9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[900],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'About ${artistData?['artist_name']}',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Text(
+                            artistData?['artist_details'] ?? '',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      TextButton(
+                        onPressed: () => setState(() => showFullDetails = false),
+                        child: Text(
+                          'Close',
+                          style: TextStyle(
+                            color: Colors.blue,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -125,30 +125,43 @@ class _LibraryPageState extends State<LibraryPage> {
         itemBuilder: (context, index) {
           final playlist = _playlists[index];
           return Card(
+            color: Colors.transparent, // Add this
+            elevation: 0, // Add this
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: () {
                 // TODO: Navigate to playlist details
               },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  Expanded(
-                    child: playlist.imageUrl != null
-                        ? Image.network(
-                            playlist.imageUrl!,
-                            fit: BoxFit.cover,
-                          )
-                        : Container(
-                            color: Colors.grey[300],
-                            child: const Icon(Icons.music_note, size: 50),
-                          ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
+                  playlist.imageUrl != null
+                      ? Image.network(
+                          playlist.imageUrl!,
+                          fit: BoxFit.cover,
+                          opacity: const AlwaysStoppedAnimation(0.4),
+                        )
+                      : Container(
+                          color: Colors.grey[300],
+                          child: const Icon(Icons.music_note, size: 50),
+                        ),
+                  Positioned(
+                    left: 3,
+                    bottom: 8,
                     child: Text(
                       playlist.playlistName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        shadows: [
+                          Shadow(
+                            offset: Offset(0, 1),
+                            blurRadius: 3.0,
+                            color: Colors.black54,
+                          ),
+                        ],
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
