@@ -4,6 +4,7 @@ import 'package:just_audio/just_audio.dart';
 import '../services/music_service.dart';
 import 'dart:ui';
 import 'full_screen_player.dart';
+import 'dart:io';
 
 class BottomPlayer extends StatefulWidget {
   final MusicService musicService;
@@ -108,6 +109,68 @@ class _BottomPlayerState extends State<BottomPlayer> {
     }
   }
 
+  Widget _buildSongImage() {
+    if (widget.currentSong == null) return const SizedBox();
+
+    return FutureBuilder<String?>(
+      future: widget.musicService.getCachedImagePath(widget.currentSong!['id']),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data != null) {
+          // Use cached image
+          return Hero(
+            tag: 'album_art_${widget.currentSong!['id']}',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(
+                File(snapshot.data!),
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+              ),
+            ),
+          );
+        }
+        // Fallback to network image
+        return Hero(
+          tag: 'album_art_${widget.currentSong!['id']}',
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              widget.currentSong!['image_url'] as String,
+              width: 44,
+              height: 44,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 44,
+                  height: 44,
+                  color: Colors.grey[800],
+                  child: Icon(Icons.music_note, color: Colors.white),
+                );
+              },
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  width: 44,
+                  height: 44,
+                  color: Colors.grey[800],
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.currentSong == null || widget.currentSong!['title'] == null) {
@@ -141,48 +204,7 @@ class _BottomPlayerState extends State<BottomPlayer> {
                         child: Row(
                           children: [
                             // Song image with Hero widget
-                            Hero(
-                              tag: 'album_art_${widget.currentSong!['id']}',
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  widget.currentSong!['image_url'] as String,
-                                  width: 44,
-                                  height: 44,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      width: 44,
-                                      height: 44,
-                                      color: Colors.grey[800],
-                                      child: Icon(Icons.music_note,
-                                          color: Colors.white),
-                                    );
-                                  },
-                                  loadingBuilder:
-                                      (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Container(
-                                      width: 44,
-                                      height: 44,
-                                      color: Colors.grey[800],
-                                      child: Center(
-                                        child: CircularProgressIndicator(
-                                          value: loadingProgress
-                                                      .expectedTotalBytes !=
-                                                  null
-                                              ? loadingProgress
-                                                      .cumulativeBytesLoaded /
-                                                  loadingProgress
-                                                      .expectedTotalBytes!
-                                              : null,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
+                            _buildSongImage(),
                             const SizedBox(width: 12),
                             // Song info
                             Expanded(

@@ -135,9 +135,46 @@ class MusicService {
       {Map<String, dynamic>? currentSong,
       Map<String, dynamic>? nextSong,
       List<Map<String, dynamic>>? subsequentSongs}) async {
-    if (currentSong != null && currentSong['id'] != null) {
-      try {
-        final metadata = await _localStorageService.getData('metadata_${currentSong['id']}');
+    try {
+      final playlist = ConcatenatingAudioSource(children: []);
+      
+      // Handle current song
+      if (currentSong != null) {
+        final source = await _getAudioSource(currentSong);
+        if (source != null) {
+          playlist.add(source);
+        }
+      }
+
+      // Handle subsequent songs
+      if (subsequentSongs != null) {
+        for (var song in subsequentSongs) {
+          final source = await _getAudioSource(song);
+          if (source != null) {
+            playlist.add(source);
+          }
+        }
+      }
+
+      if (playlist.length > 0) {
+        await _audioPlayer.setAudioSource(playlist);
+        _playlist = playlist;
+        await _audioPlayer.play();
+        _updateQueueStream();
+      } else {
+        throw Exception('No playable audio sources found');
+      }
+    } catch (e) {
+      print('Error playing song: $e');
+      throw Exception('Failed to play song: $e');
+    }
+  }
+
+  Future<AudioSource?> _getAudioSource(Map<String, dynamic> song) async {
+    try {
+      // First try to get local file
+      if (await isSongDownloaded(song['id'])) {
+        final metadata = await _localStorageService.getData('metadata_${song['id']}');
         if (metadata != null && metadata['secure_file'] != null) {
           final filePath = await _getSecureFilePath(metadata['secure_file']);
           final file = File(filePath);
@@ -145,71 +182,40 @@ class MusicService {
           if (await file.exists()) {
             // Decrypt the file
             final encrypted = await file.readAsBytes();
-            final decrypted = _xorEncrypt(encrypted, currentSong['id']); // XOR is its own inverse
+            final decrypted = _xorEncrypt(encrypted, song['id']);
 
             // Create temporary file for playback
-            final tempFile = await File('${(await getTemporaryDirectory()).path}/temp_${currentSong['id']}.mp3');
+            final tempFile = await File('${(await getTemporaryDirectory()).path}/temp_${song['id']}.mp3');
             await tempFile.writeAsBytes(decrypted);
-
-            // Create playlist and play
-            final playlist = ConcatenatingAudioSource(children: [
-              AudioSource.file(tempFile.path, tag: currentSong),
-            ]);
-
-            // Add subsequent songs...
-            if (subsequentSongs != null) {
-              for (var song in subsequentSongs) {
-                if (song['audio_url'] != null) {
-                  playlist.add(AudioSource.uri(
-                    Uri.parse(song['audio_url']),
-                    tag: song,
-                  ));
-                }
-              }
-            }
-
-            await _audioPlayer.setAudioSource(playlist);
-            _playlist = playlist;
-            await _audioPlayer.play();
-            _updateQueueStream();
-
-            // Delete temp file after playback starts
-            tempFile.delete().catchError((e) => print('Error deleting temp file: $e'));
-            return;
+            
+            return AudioSource.file(
+              tempFile.path,
+              tag: song,
+            );
           }
         }
-      } catch (e) {
-        print('Error playing local file: $e');
       }
-    }
-
-    // Fall back to streaming if no local file exists or if there's an error
-    try {
-      final playlist = ConcatenatingAudioSource(children: [
-        AudioSource.uri(
-          Uri.parse(url),
-          tag: currentSong ?? {'audio_url': url},
-        ),
-      ]);
-
-      if (subsequentSongs != null) {
-        for (var song in subsequentSongs) {
-          if (song['audio_url'] != null) {
-            playlist.add(AudioSource.uri(
+      
+      // Fallback to online URL if available and we have network connectivity
+      if (song['audio_url'] != null) {
+        try {
+          final result = await InternetAddress.lookup('google.com');
+          if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
+            return AudioSource.uri(
               Uri.parse(song['audio_url']),
               tag: song,
-            ));
+            );
           }
+        } catch (_) {
+          // No internet connection
+          return null;
         }
       }
-
-      await _audioPlayer.setAudioSource(playlist);
-      _playlist = playlist;
-      await _audioPlayer.play();
-      _updateQueueStream();
+      
+      return null;
     } catch (e) {
-      print('Error streaming song: $e');
-      throw Exception('Failed to play song: $e');
+      print('Error creating audio source: $e');
+      return null;
     }
   }
 
@@ -434,13 +440,25 @@ class MusicService {
     if (songs.isEmpty) return;
 
     try {
-      // Play the first song
-      final firstSong = songs[0];
-      final audioUrl = firstSong['audio_url'] as String?;
-      if (audioUrl == null || audioUrl.isEmpty) {
-        throw Exception('Song URL is missing');
+      final playlist = ConcatenatingAudioSource(children: []);
+      bool addedAtLeastOne = false;
+
+      for (var song in songs) {
+        final source = await _getAudioSource(song);
+        if (source != null) {
+          playlist.add(source);
+          addedAtLeastOne = true;
+        }
       }
-      await playSong(audioUrl);
+
+      if (addedAtLeastOne) {
+        await _audioPlayer.setAudioSource(playlist);
+        _playlist = playlist;
+        await _audioPlayer.play();
+        _updateQueueStream();
+      } else {
+        throw Exception('No playable songs found');
+      }
     } catch (e) {
       throw Exception('Failed to play songs: $e');
     }

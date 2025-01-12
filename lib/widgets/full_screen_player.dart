@@ -3,6 +3,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import '../services/music_service.dart';
+import 'dart:io';
 
 class FullScreenPlayer extends StatefulWidget {
   final MusicService musicService;
@@ -43,8 +44,11 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
   }
 
   Future<void> _loadImagePalette() async {
+    // Remove the implementation as it's now handled in _buildAlbumArt
+  }
+
+  Future<void> _loadPaletteFromProvider(ImageProvider imageProvider) async {
     try {
-      final imageProvider = NetworkImage(widget.currentSong['image_url']);
       final palette = await PaletteGenerator.fromImageProvider(imageProvider);
       if (mounted) {
         setState(() {
@@ -54,6 +58,51 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
     } catch (e) {
       print('Error loading palette: $e');
     }
+  }
+
+  Widget _buildAlbumArt() {
+    return FutureBuilder<String?>(
+      future: widget.musicService.getCachedImagePath(widget.currentSong['id']),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data != null) {
+          // Use cached image
+          final imageProvider = FileImage(File(snapshot.data!));
+          // Load palette from cached image
+          _loadPaletteFromProvider(imageProvider);
+          
+          return Hero(
+            tag: 'album_art_${widget.currentSong['id']}',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image(
+                image: imageProvider,
+                fit: BoxFit.cover,
+              ),
+            ),
+          );
+        }
+        // Fallback to network image
+        final networkImageProvider = NetworkImage(widget.currentSong['image_url']);
+        _loadPaletteFromProvider(networkImageProvider);
+        
+        return Hero(
+          tag: 'album_art_${widget.currentSong['id']}',
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image(
+              image: networkImageProvider,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  color: Colors.grey[800],
+                  child: Icon(Icons.music_note, color: Colors.white, size: 64),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   IconData _getRepeatIcon() {
@@ -300,16 +349,7 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(32.0),
-                      child: Hero(
-                        tag: 'album_art_${widget.currentSong['id']}',
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            widget.currentSong['image_url'],
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
+                      child: _buildAlbumArt(),  // Replace the existing Image.network with this
                     ),
                   ),
 

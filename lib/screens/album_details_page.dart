@@ -39,6 +39,8 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
   List<Map<String, dynamic>> _filteredSongs = [];
   final TextEditingController _searchController = TextEditingController();
   late Future<List<Map<String, dynamic>>> _songsFuture;
+  bool _isDownloadingAlbum = false;
+  double _downloadProgress = 0.0;
 
   @override
   void initState() {
@@ -63,6 +65,61 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
       setState(() {
         _allSongs = downloadedSongs;
         _filteredSongs = downloadedSongs;
+      });
+    }
+  }
+
+  Future<void> _downloadAllSongs() async {
+    if (_isDownloadingAlbum) return;
+
+    setState(() {
+      _isDownloadingAlbum = true;
+      _downloadProgress = 0.0;
+    });
+
+    try {
+      final songs = await _songsFuture;
+      final totalSongs = songs.length;
+      int downloadedSongs = 0;
+
+      for (var song in songs) {
+        try {
+          if (!(await widget.musicService.isSongDownloaded(song['id']))) {
+            final songToDownload = {
+              ...song,
+              'album_title': widget.album['title'],
+            };
+            await widget.musicService.downloadSong(songToDownload);
+          }
+          downloadedSongs++;
+          setState(() {
+            _downloadProgress = downloadedSongs / totalSongs;
+          });
+        } catch (e) {
+          print('Error downloading song: $e');
+          // Continue with next song even if one fails
+        }
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('All songs downloaded successfully!'),
+          backgroundColor: Colors.green[700],
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to download some songs: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isDownloadingAlbum = false;
+        _downloadProgress = 0.0;
       });
     }
   }
@@ -283,45 +340,96 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          try {
-                            final songs = await widget.musicService
-                                .getAlbumSongs(widget.album['id']);
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                try {
+                                  final songs = await widget.musicService
+                                      .getAlbumSongs(widget.album['id']);
 
-                            if (songs.isNotEmpty) {
-                              widget.onSongPlay({
-                                ...songs[0],
-                                'image_url': widget.album['image_url'],
-                              });
+                                  if (songs.isNotEmpty) {
+                                    widget.onSongPlay({
+                                      ...songs[0],
+                                      'image_url': widget.album['image_url'],
+                                    });
 
-                              await widget.musicService.playAllSongs(songs);
-                            }
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                    'Failed to play album: ${e.toString()}'),
-                                backgroundColor: Colors.red,
+                                    await widget.musicService.playAllSongs(songs);
+                                  }
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          'Failed to play album: ${e.toString()}'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                minimumSize: Size(120, 48),
                               ),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                              child: Text(
+                                'Play All',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
                           ),
-                          minimumSize: Size(120, 48),
-                        ),
-                        child: Text(
-                          'Play All',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                          SizedBox(width: 12),
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(24),
+                                onTap: _isDownloadingAlbum ? null : _downloadAllSongs,
+                                child: Center(
+                                  child: _isDownloadingAlbum
+                                      ? Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            CircularProgressIndicator(
+                                              value: _downloadProgress,
+                                              backgroundColor: Colors.grey[800],
+                                              valueColor: AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                              strokeWidth: 2,
+                                            ),
+                                            Text(
+                                              '${(_downloadProgress * 100).toInt()}%',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Icon(
+                                          Icons.download_rounded,
+                                          color: Colors.white,
+                                          size: 24,
+                                        ),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
@@ -331,14 +439,6 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                           horizontal: 32.0, vertical: 8.0),
                       child: Row(
                         children: [
-                          SizedBox(
-                            width: 24,
-                            child: Text(
-                              '#',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ),
-                          SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Title',
@@ -581,106 +681,6 @@ class _SongListView extends StatelessWidget {
     required this.onLocalSongUpdate,
   }) : super(key: key);
 
-  Widget _buildDownloadButton(BuildContext context, Map<String, dynamic> song) {
-    return FutureBuilder<bool>(
-      // Add key to force rebuild when download state changes
-      key: ValueKey('download_${song['id']}_${DateTime.now().millisecondsSinceEpoch}'),
-      future: musicService.isSongDownloaded(song['id']),
-      builder: (context, snapshot) {
-        final isDownloaded = snapshot.data ?? false;
-        
-        return DownloadButton(
-          isDownloaded: isDownloaded,
-          onPressed: () async {
-            try {
-              // Show downloading indicator
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Text('Downloading ${song['title']}...'),
-                    ],
-                  ),
-                  duration: Duration(seconds: 2),
-                  backgroundColor: Colors.black87,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              );
-
-              final songToDownload = {
-                ...song,
-                'album_title': album['title'],
-                // Remove the image_url override to preserve the original song image
-              };
-              
-              await musicService.downloadSong(songToDownload);
-
-              // Force a rebuild of the entire list tile
-              (context as Element).markNeedsBuild();
-
-              // Add a slight delay before showing success message to ensure UI updates
-              await Future.delayed(Duration(milliseconds: 100));
-
-              // Show success message
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        Icon(Icons.check_circle_outline, color: Colors.green[400]),
-                        SizedBox(width: 12),
-                        Text('Downloaded successfully'),
-                      ],
-                    ),
-                    duration: Duration(seconds: 2),
-                    backgroundColor: Colors.black87,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                );
-              }
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        Icon(Icons.error_outline, color: Colors.red[400]),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Text('Download failed: ${e.toString()}'),
-                        ),
-                      ],
-                    ),
-                    backgroundColor: Colors.black87,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                );
-              }
-            }
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildSongImage(Map<String, dynamic> song) {
     return FutureBuilder<String?>(
       future: musicService.getCachedImagePath(song['id']),
@@ -773,23 +773,7 @@ class _SongListView extends StatelessWidget {
               ),
               child: ListTile(
                 contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      child: Text(
-                        '${index + 1}',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    _buildSongImage(song),
-                  ],
-                ),
+                leading: _buildSongImage(song), // Directly use _buildSongImage here
                 title: Padding(
                   padding: EdgeInsets.only(left: 8),
                   child: Column(
@@ -821,7 +805,6 @@ class _SongListView extends StatelessWidget {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildDownloadButton(context, song),
                     Text(
                       song['duration'] ?? '0:00',
                       style: TextStyle(
