@@ -23,21 +23,33 @@ class LocalStorageService {
   }
 
   Future<void> saveData(String key, dynamic value) async {
-    final prefs = await _prefs;
-    
-    // Convert value to JSON string before saving
-    String jsonString = json.encode(value);
-    await prefs.setString(key, jsonString);
+    final prefs = await SharedPreferences.getInstance();
+    if (value is Map) {
+      await prefs.setString(key, json.encode(value));
+    } else if (value is List) {
+      await prefs.setString(key, json.encode(value));
+    } else if (value is String) {
+      await prefs.setString(key, value);
+    } else if (value is bool) {
+      await prefs.setBool(key, value);
+    } else if (value is int) {
+      await prefs.setInt(key, value);
+    } else if (value is double) {
+      await prefs.setDouble(key, value);
+    }
   }
 
   Future<dynamic> getData(String key) async {
-    final prefs = await _prefs;
-    String? jsonString = prefs.getString(key);
-    
-    if (jsonString == null) return null;
-    
-    // Parse JSON string back to data
-    return json.decode(jsonString);
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.get(key);
+    if (value is String) {
+      try {
+        return json.decode(value);
+      } catch (e) {
+        return value;
+      }
+    }
+    return value;
   }
 
   Future<void> removeData(String key) async {

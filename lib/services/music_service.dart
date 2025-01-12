@@ -26,6 +26,14 @@ class MusicService {
   static const String ARTISTS_CACHE_KEY = 'artists_cache';
   static const String SONGS_CACHE_KEY = 'songs_cache';
 
+  // Add these properties
+  final Map<String, double> _downloadProgress = {};
+  final Map<String, bool> _isDownloading = {};
+  final _downloadProgressController = StreamController<Map<String, double>>.broadcast();
+
+  static const String DOWNLOAD_STATE_KEY = 'download_state';
+  static const String DOWNLOAD_PROGRESS_KEY = 'download_progress';
+
   MusicService() {
     _playlist = ConcatenatingAudioSource(children: []);
   }
@@ -55,9 +63,63 @@ class MusicService {
     });
   }
 
+  Future<void> _initDownloadState() async {
+    try {
+      final savedStates = await _localStorageService.getData(DOWNLOAD_STATE_KEY);
+      final savedProgress = await _localStorageService.getData(DOWNLOAD_PROGRESS_KEY);
+      
+      if (savedStates != null) {
+        _isDownloading.clear();
+        Map<String, dynamic> states = Map<String, dynamic>.from(savedStates);
+        states.forEach((key, value) {
+          if (value is bool) {
+            _isDownloading[key] = value;
+          }
+        });
+      }
+      
+      if (savedProgress != null) {
+        _downloadProgress.clear();
+        Map<String, dynamic> progress = Map<String, dynamic>.from(savedProgress);
+        progress.forEach((key, value) {
+          if (value is num) {
+            _downloadProgress[key] = value.toDouble();
+          }
+        });
+      }
+      
+      // Emit initial state immediately
+      _downloadProgressController.add(Map<String, double>.from(_downloadProgress));
+    } catch (e) {
+      print('Error loading download state: $e');
+    }
+  }
+
+  Future<void> _saveDownloadState() async {
+    try {
+      // Convert the maps to simple Map<String, dynamic>
+      Map<String, dynamic> states = {};
+      _isDownloading.forEach((key, value) {
+        states[key] = value;
+      });
+
+      Map<String, dynamic> progress = {};
+      _downloadProgress.forEach((key, value) {
+        progress[key] = value;
+      });
+      
+      await _localStorageService.saveData(DOWNLOAD_STATE_KEY, states);
+      await _localStorageService.saveData(DOWNLOAD_PROGRESS_KEY, progress);
+    } catch (e) {
+      print('Error saving download state: $e');
+    }
+  }
+
   Future<void> init() async {
     await _encryptedStorage.init();
     await _initAudioPlayer();
+    await _initDownloadState();
+    await checkIncompleteDownloads();  // Add this line
   }
 
   Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
@@ -372,6 +434,7 @@ class MusicService {
   void dispose() {
     _audioPlayer.dispose();
     _currentSongController.close();
+    _downloadProgressController.close();
   }
 
   Future<List<Map<String, dynamic>>> searchSongs(String query,
@@ -707,18 +770,21 @@ class MusicService {
     }
   }
 
-  Future<List<int>?> _downloadFromUrl(String url) async {
+  Future<List<int>?> _downloadFromUrl(String url, {Function(double)? onProgress}) async {
     try {
       print('Attempting to download from URL: $url');
-      final response = await http.get(Uri.parse(url));
+      final response = await http.Client().send(http.Request('GET', Uri.parse(url)));
+      final totalBytes = response.contentLength ?? 0;
+      List<int> bytes = [];
       
-      if (response.statusCode == 200) {
-        print('Successfully downloaded ${response.bodyBytes.length} bytes');
-        return response.bodyBytes;
-      } else {
-        print('Download failed with status: ${response.statusCode}');
-        return null;
+      await for (var chunk in response.stream) {
+        bytes.addAll(chunk);
+        if (totalBytes > 0 && onProgress != null) {
+          onProgress(bytes.length / totalBytes);
+        }
       }
+      
+      return bytes;
     } catch (e) {
       print('Error downloading from URL: $e');
       return null;
@@ -730,6 +796,18 @@ class MusicService {
     final albumId = song['album_id'];
     final originalImageUrl = song['image_url'];  // Store original image URL
     final albumImageUrl = song['album_image_url'];  // Store album image URL separately
+
+    // Set download state before checking if already downloading
+    _isDownloading[songId] = true;
+    _downloadProgress[songId] = 0.0;
+    _downloadProgressController.add(Map.from(_downloadProgress));
+    await _saveDownloadState();
+
+    // Check if already downloading
+    if (_isDownloading[songId] == true && _downloadProgress[songId]! > 0.0) {
+      print('Song $songId is already downloading');
+      return;
+    }
 
     try {
       print('Starting download for song ID: $songId');
@@ -744,7 +822,12 @@ class MusicService {
         throw Exception('Could not find audio URL for song');
       }
 
-      final bytes = await _downloadFromUrl(audioUrl);
+      // Update progress as bytes are downloaded
+      final bytes = await _downloadFromUrl(audioUrl, onProgress: (progress) {
+        _downloadProgress[songId] = progress;
+        _downloadProgressController.add(Map.from(_downloadProgress));
+      });
+      
       if (bytes == null || bytes.isEmpty) {
         throw Exception('Failed to download audio file');
       }
@@ -796,7 +879,30 @@ class MusicService {
 
       await _updateDownloadedSongsList(metadata);
       print('Successfully downloaded song: $songId');
+
+      // Clear progress when done
+      _isDownloading[songId] = false;
+      _downloadProgress.remove(songId);
+      _downloadProgressController.add(Map.from(_downloadProgress));
+      await _saveDownloadState();
+      
+      // Wait a bit before clearing the state completely
+      await Future.delayed(Duration(seconds: 1));
+      _isDownloading.remove(songId);
+      await _saveDownloadState();
+
     } catch (e) {
+      // Clear progress on error
+      _isDownloading[songId] = false;
+      _downloadProgress.remove(songId);
+      _downloadProgressController.add(Map.from(_downloadProgress));
+      await _saveDownloadState();
+      
+      // Wait a bit before clearing the state completely
+      await Future.delayed(Duration(seconds: 1));
+      _isDownloading.remove(songId);
+      await _saveDownloadState();
+      
       print('Error downloading song: $e');
       throw Exception('Failed to download song: $e');
     }
@@ -961,6 +1067,8 @@ class MusicService {
       rethrow;
     }
   }
+
+  Stream<Map<String, double>> get downloadProgressStream => _downloadProgressController.stream;
 
   Stream<Map<String, dynamic>> get currentSongStream =>
       _currentSongController.stream;
@@ -1140,6 +1248,130 @@ class MusicService {
     } catch (e) {
       print('Error adding song to playlist: $e');
       throw Exception('Failed to add song to playlist');
+    }
+  }
+
+  // Add these methods
+  bool isDownloading(String songId) => _isDownloading[songId] ?? false;
+  double getDownloadProgress(String songId) => _downloadProgress[songId] ?? 0.0;
+
+  // Add method to clear stuck downloads if needed
+  Future<void> resetDownloadState() async {
+    _isDownloading.clear();
+    _downloadProgress.clear();
+    _downloadProgressController.add({});
+    await _saveDownloadState();
+  }
+
+  // Add method to get download state
+  Map<String, dynamic> getDownloadState(String songId) {
+    return {
+      'isDownloading': _isDownloading[songId] ?? false,
+      'progress': _downloadProgress[songId] ?? 0.0,
+    };
+  }
+
+  // Add method to check incomplete downloads on startup
+  Future<void> checkIncompleteDownloads() async {
+    final downloadingKeys = _isDownloading.keys.toList();
+    for (final songId in downloadingKeys) {
+      if (_isDownloading[songId] == true) {
+        // Clear any stuck downloads
+        _isDownloading[songId] = false;
+        _downloadProgress.remove(songId);
+      }
+    }
+    _downloadProgressController.add(Map.from(_downloadProgress));
+    await _saveDownloadState();
+  }
+
+  // Add this new method to check if all songs in an album are downloaded
+  Future<bool> isAlbumFullyDownloaded(String albumId) async {
+    try {
+      // Get all songs in the album
+      final allSongs = await getAlbumSongs(albumId);
+      if (allSongs.isEmpty) return false;
+
+      // Check if each song is downloaded
+      for (var song in allSongs) {
+        final isDownloaded = await isSongDownloaded(song['id']);
+        if (!isDownloaded) return false;
+      }
+
+      return true;
+    } catch (e) {
+      print('Error checking album download status: $e');
+      return false;
+    }
+  }
+
+  // Add this method to get album download progress
+  Future<Map<String, dynamic>> getAlbumDownloadState(String albumId) async {
+    try {
+      final allSongs = await getAlbumSongs(albumId);
+      if (allSongs.isEmpty) {
+        return {
+          'isDownloading': false,
+          'isFullyDownloaded': false,
+          'progress': 0.0,
+        };
+      }
+
+      int downloadedCount = 0;
+      bool anyDownloading = false;
+      double totalProgress = 0.0;
+      int downloadsInProgress = 0;
+
+      for (var song in allSongs) {
+        final songId = song['id'];
+        if (await isSongDownloaded(songId)) {
+          downloadedCount++;
+          totalProgress += 1.0;
+        } else if (_isDownloading[songId] == true) {
+          anyDownloading = true;
+          downloadsInProgress++;
+          totalProgress += (_downloadProgress[songId] ?? 0.0);
+        }
+      }
+
+      final isFullyDownloaded = downloadedCount == allSongs.length;
+      final averageProgress = allSongs.isEmpty ? 
+          0.0 : 
+          totalProgress / allSongs.length;
+
+      return {
+        'isDownloading': anyDownloading,
+        'isFullyDownloaded': isFullyDownloaded,
+        'progress': averageProgress,
+        'totalSongs': allSongs.length,
+        'downloadedSongs': downloadedCount,
+        'downloadsInProgress': downloadsInProgress,
+      };
+    } catch (e) {
+      print('Error getting album download state: $e');
+      return {
+        'isDownloading': false,
+        'isFullyDownloaded': false,
+        'progress': 0.0,
+        'totalSongs': 0,
+        'downloadedSongs': 0,
+        'downloadsInProgress': 0,
+      };
+    }
+  }
+
+  // Add this method to download all songs in an album
+  Future<void> downloadAlbum(String albumId) async {
+    try {
+      final songs = await getAlbumSongs(albumId);
+      for (var song in songs) {
+        if (!await isSongDownloaded(song['id'])) {
+          await downloadSong(song);
+        }
+      }
+    } catch (e) {
+      print('Error downloading album: $e');
+      rethrow;
     }
   }
 }

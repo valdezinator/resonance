@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:google_fonts/google_fonts.dart';
 import 'library_page.dart';
 
+
 class AlbumDetailsPage extends StatefulWidget {
   final Map<String, dynamic> album;
   final MusicService musicService;
@@ -394,38 +395,63 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                             ),
                             child: Material(
                               color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(24),
-                                onTap: _isDownloadingAlbum ? null : _downloadAllSongs,
-                                child: Center(
-                                  child: _isDownloadingAlbum
-                                      ? Stack(
-                                          alignment: Alignment.center,
-                                          children: [
-                                            CircularProgressIndicator(
-                                              value: _downloadProgress,
-                                              backgroundColor: Colors.grey[800],
-                                              valueColor: AlwaysStoppedAnimation<Color>(
-                                                Colors.white,
-                                              ),
-                                              strokeWidth: 2,
-                                            ),
-                                            Text(
-                                              '${(_downloadProgress * 100).toInt()}%',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                      : Icon(
-                                          Icons.download_rounded,
-                                          color: Colors.white,
-                                          size: 24,
+                              child: FutureBuilder<Map<String, dynamic>>(
+                                future: widget.musicService.getAlbumDownloadState(widget.album['id']),
+                                builder: (context, snapshot) {
+                                  final downloadState = snapshot.data ?? {
+                                    'isDownloading': false,
+                                    'isFullyDownloaded': false,
+                                    'progress': 0.0,
+                                  };
+
+                                  final isDownloading = downloadState['isDownloading'] ?? false;
+                                  final isFullyDownloaded = downloadState['isFullyDownloaded'] ?? false;
+                                  final progress = downloadState['progress'] ?? 0.0;
+
+                                  if (isFullyDownloaded) {
+                                    return Center(
+                                      child: Icon(
+                                        Icons.download_done_rounded,
+                                        color: Colors.green[400],
+                                        size: 24,
+                                      ),
+                                    );
+                                  }
+
+                                  if (isDownloading) {
+                                    return Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        CircularProgressIndicator(
+                                          value: progress,
+                                          backgroundColor: Colors.grey[800],
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          strokeWidth: 2,
                                         ),
-                                ),
+                                        Text(
+                                          '${(progress * 100).toInt()}%',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }
+
+                                  return InkWell(
+                                    borderRadius: BorderRadius.circular(24),
+                                    onTap: _downloadAllSongs,
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.download_rounded,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ),
@@ -558,11 +584,15 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
 class DownloadButton extends StatefulWidget {
   final bool isDownloaded;
   final Function() onPressed;
+  final String songId;  // Add this
+  final MusicService musicService;  // Add this
 
   const DownloadButton({
     Key? key,
     required this.isDownloaded,
     required this.onPressed,
+    required this.songId,  // Add this
+    required this.musicService,  // Add this
   }) : super(key: key);
 
   @override
@@ -572,7 +602,6 @@ class DownloadButton extends StatefulWidget {
 class _DownloadButtonState extends State<DownloadButton> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _downloadedScale;
-  bool _isDownloading = false;
   
   @override
   void initState() {
@@ -602,65 +631,72 @@ class _DownloadButtonState extends State<DownloadButton> with SingleTickerProvid
     super.dispose();
   }
 
-  void _startDownload() async {
-    setState(() => _isDownloading = true);
-    _controller.repeat();
-    
-    await widget.onPressed();
-    
-    _controller.stop();
-    setState(() => _isDownloading = false);
-    
-    // Add completion animation
-    _controller.reset();
-    _controller.forward();
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (widget.isDownloaded) {
-      return ScaleTransition(
-        scale: _downloadedScale,
-        child: IconButton(
-          icon: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(
-                Icons.check_circle,
-                color: Colors.green[400],
+    return StreamBuilder<Map<String, double>>(
+      stream: widget.musicService.downloadProgressStream,
+      builder: (context, snapshot) {
+        return FutureBuilder<bool>(
+          future: widget.musicService.isSongDownloaded(widget.songId),
+          builder: (context, downloadedSnapshot) {
+            final isDownloaded = downloadedSnapshot.data ?? widget.isDownloaded;
+            final isDownloading = widget.musicService.isDownloading(widget.songId);
+            final downloadProgress = snapshot.data?[widget.songId] ?? 0.0;
+
+            // Show completed download icon
+            if (isDownloaded) {
+              return ScaleTransition(
+                scale: _downloadedScale,
+                child: Icon(
+                  Icons.download_done_rounded,
+                  color: Colors.green[400],
+                  size: 24,
+                ),
+              );
+            }
+
+            // Show progress indicator while downloading
+            if (isDownloading) {
+              return SizedBox(
+                width: 24,
+                height: 24,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      value: downloadProgress,
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                    ),
+                    if (downloadProgress > 0)
+                      Text(
+                        '${(downloadProgress * 100).toInt()}%',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }
+
+            // Show download button
+            return IconButton(
+              icon: Icon(
+                Icons.download_rounded,
+                color: Colors.grey[400],
                 size: 24,
               ),
-              Icon(
-                Icons.check_circle_outline,
-                color: Colors.green[400]?.withOpacity(0.5),
-                size: 28,
-              ),
-            ],
-          ),
-          onPressed: null,
-        ),
-      );
-    }
-
-    if (_isDownloading) {
-      return Container(
-        width: 48,
-        height: 48,
-        padding: EdgeInsets.all(12),
-        child: CircularProgressIndicator(
-          strokeWidth: 2.5,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
-        ),
-      );
-    }
-
-    return IconButton(
-      icon: Icon(
-        Icons.download_rounded,
-        color: Colors.grey[400],
-        size: 24,
-      ),
-      onPressed: _startDownload,
+              onPressed: () async {
+                await widget.onPressed();
+                _controller.forward();
+              },
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -755,6 +791,29 @@ class _SongListView extends StatelessWidget {
         song: song,
         musicService: musicService,
       ),
+    );
+  }
+
+  Widget _buildDownloadButton(BuildContext context, Map<String, dynamic> song) {
+    return FutureBuilder<bool>(
+      key: ValueKey('download_${song['id']}'), // Remove timestamp to prevent rebuilds
+      future: musicService.isSongDownloaded(song['id']),
+      builder: (context, snapshot) {
+        final isDownloaded = snapshot.data ?? false;
+        
+        return DownloadButton(
+          isDownloaded: isDownloaded,
+          onPressed: () async {
+            final songToDownload = {
+              ...song,
+              'album_title': album['title'],
+            };
+            await musicService.downloadSong(songToDownload);
+          },
+          songId: song['id'],  // Add this
+          musicService: musicService,  // Add this
+        );
+      },
     );
   }
 
