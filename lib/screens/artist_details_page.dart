@@ -5,6 +5,96 @@ import 'package:google_fonts/google_fonts.dart';
 import '../services/music_service.dart';
 import '../widgets/bottom_player.dart';
 import '../widgets/floating_player_mixin.dart';
+import 'dart:math' as math;
+
+class BlobPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final height = size.height;
+    
+    // Base background
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..color = const Color(0xFF0c0f14),
+    );
+
+    void drawBlob(Offset center, double radius, Color color, double opacity) {
+      final path = Path();
+      final rnd = math.Random();
+      
+      const spikes = 6;
+      const step = 2 * math.pi / spikes;
+      
+      for (var i = 0; i < spikes; i++) {
+        final angle = i * step;
+        final nextAngle = (i + 1) * step;
+        
+        final radiusOffset = radius * (0.8 + 0.4 * rnd.nextDouble());
+        final nextRadiusOffset = radius * (0.8 + 0.4 * rnd.nextDouble());
+        
+        final x1 = center.dx + radiusOffset * math.cos(angle);
+        final y1 = center.dy + radiusOffset * math.sin(angle);
+        
+        final x2 = center.dx + nextRadiusOffset * math.cos(nextAngle);
+        final y2 = center.dy + nextRadiusOffset * math.sin(nextAngle);
+        
+        if (i == 0) {
+          path.moveTo(x1, y1);
+        }
+        
+        final controlX = center.dx + radius * 1.5 * math.cos((angle + nextAngle) / 2);
+        final controlY = center.dy + radius * 1.5 * math.sin((angle + nextAngle) / 2);
+        
+        path.quadraticBezierTo(controlX, controlY, x2, y2);
+      }
+      
+      path.close();
+      
+      final paint = Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(0.0, 0.0),
+          radius: 1.0,
+          colors: [
+            color.withOpacity(opacity),
+            color.withOpacity(0),
+          ],
+        ).createShader(Rect.fromCircle(center: center, radius: radius * 2));
+      
+      canvas.drawPath(path, paint);
+    }
+
+    // Draw multiple blobs with different sizes and positions
+    final blobConfigs = [
+      // Top section blobs
+      {'x': 0.2, 'y': 0.1, 'radius': 150.0, 'color': const Color(0xFF945e5c), 'opacity': 0.5},
+      {'x': 0.8, 'y': 0.15, 'radius': 180.0, 'color': const Color(0xFF145362), 'opacity': 0.4},
+      {'x': 0.5, 'y': 0.2, 'radius': 200.0, 'color': const Color(0xFF20202a), 'opacity': 0.3},
+      
+      // Middle section blobs
+      {'x': 0.3, 'y': 0.4, 'radius': 160.0, 'color': const Color(0xFF945e5c), 'opacity': 0.2},
+      {'x': 0.7, 'y': 0.45, 'radius': 140.0, 'color': const Color(0xFF145362), 'opacity': 0.3},
+      {'x': 0.1, 'y': 0.5, 'radius': 170.0, 'color': const Color(0xFF20202a), 'opacity': 0.2},
+      
+      // Bottom section blobs
+      {'x': 0.8, 'y': 0.7, 'radius': 190.0, 'color': const Color(0xFF945e5c), 'opacity': 0.15},
+      {'x': 0.4, 'y': 0.8, 'radius': 150.0, 'color': const Color(0xFF145362), 'opacity': 0.2},
+      {'x': 0.6, 'y': 0.9, 'radius': 180.0, 'color': const Color(0xFF20202a), 'opacity': 0.1},
+    ];
+
+    for (final config in blobConfigs) {
+      drawBlob(
+        Offset(size.width * (config['x'] as double), 
+               size.height * (config['y'] as double)),
+        config['radius'] as double,
+        config['color'] as Color,
+        config['opacity'] as double,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
 
 class ArtistDetailsPage extends StatefulWidget {
   final Map<String, dynamic> artist;
@@ -82,25 +172,14 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: Colors.transparent, // Changed from solid color
+          backgroundColor: const Color(0xFF0c0f14),
           body: Stack(
             children: [
-              // Add gradient background
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF8B0000).withOpacity(0.7), // Dark red
-                      Color(0xFFFF4500).withOpacity(0.5), // Orange-red
-                      Color(0xFF4B0082).withOpacity(0.6), // Indigo/Purple
-                      Color(0xFF000080).withOpacity(0.7), // Navy blue
-                      Color(0xFF006400).withOpacity(0.5), // Dark green
-                    ],
-                    stops: [0.0, 0.25, 0.5, 0.75, 1.0],
-                  ),
-                ),
+              // Replace the gradient Container with CustomPaint
+              CustomPaint(
+                painter: BlobPainter(),
+                size: Size(MediaQuery.of(context).size.width,
+                    MediaQuery.of(context).size.height),
               ),
               // Existing CustomScrollView
               CustomScrollView(
