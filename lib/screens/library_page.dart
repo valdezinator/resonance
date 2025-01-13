@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io'; // Add this import
 import 'package:image_cropper/image_cropper.dart'; // Add this import
 import 'package:resonance/models/playlist.dart';
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
 
 class LibraryPage extends StatefulWidget {
   final Function(int) onNavigate;
@@ -67,13 +69,16 @@ class _LibraryPageState extends State<LibraryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Scaffold(
+      backgroundColor: themeProvider.backgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0C0F14),
+        backgroundColor: Colors.transparent,
         title: Text(
           'Library',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: Colors.white,
+            color: themeProvider.getPrimaryTextColor(),
             fontWeight: FontWeight.bold,
           ),
         ),

@@ -7,6 +7,8 @@ import '../services/music_service.dart';
 import '../widgets/bottom_player.dart';
 import '../widgets/floating_player_mixin.dart';
 import 'dart:math' as math;
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
 
 class BlobPainter extends CustomPainter {
   @override
@@ -266,10 +268,12 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: const Color(0xFF0c0f14),
+          backgroundColor: themeProvider.backgroundColor,
           body: Stack(
             children: [
               CustomPaint(
@@ -299,7 +303,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                       style: GoogleFonts.raleway(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: themeProvider.getPrimaryTextColor(),
                       ),
                     ),
                     centerTitle: true,
@@ -390,7 +394,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                               style: GoogleFonts.raleway(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: themeProvider.getPrimaryTextColor(),
                               ),
                             ),
                           ),
@@ -433,7 +437,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                                         Text(
                                           artistData?['latest_release_album_url'] ?? 'Album name unavailable',
                                           style: GoogleFonts.lato(
-                                            color: Colors.white,
+                                            color: themeProvider.getPrimaryTextColor(),
                                             fontSize: 18, // Increased from 16
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -459,7 +463,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                               style: GoogleFonts.raleway(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: themeProvider.getPrimaryTextColor(),
                               ),
                             ),
                           ),
@@ -497,7 +501,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                                         Text(
                                           song['title'],
                                           style: TextStyle(
-                                            color: Colors.white,
+                                            color: themeProvider.getPrimaryTextColor(),
                                             fontWeight: FontWeight.w500,
                                             fontSize: 16,
                                           ),
@@ -521,7 +525,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                                         widget.currentSong != null && 
                                         widget.currentSong!['id'] == song['id'] ? 
                                         Icons.pause : Icons.play_arrow,
-                                        color: Colors.white,
+                                        color: themeProvider.getPrimaryTextColor(),
                                       ),
                                       onPressed: () async {
                                         try {
@@ -583,7 +587,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                               style: GoogleFonts.raleway(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: themeProvider.getPrimaryTextColor(),
                               ),
                             ),
                           ),
@@ -633,7 +637,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                                               Text(
                                                 album['title'],
                                                 style: TextStyle(
-                                                  color: Colors.white,
+                                                  color: themeProvider.getPrimaryTextColor(),
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w600,
                                                 ),
@@ -693,7 +697,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                 child: BottomNavigationBar(
                   elevation: 0,
                   backgroundColor: Colors.transparent,
-                  selectedItemColor: Colors.white,
+                  selectedItemColor: themeProvider.getPrimaryTextColor(),
                   unselectedItemColor: Colors.grey.withOpacity(0.6),
                   currentIndex: widget.selectedIndex,
                   type: BottomNavigationBarType.fixed,
@@ -703,7 +707,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                       icon: SvgPicture.asset(
                         'assets/icons/home_icon.svg',
                         colorFilter: ColorFilter.mode(
-                          widget.selectedIndex == 0 ? Colors.white : Colors.grey,
+                          widget.selectedIndex == 0 ? themeProvider.getPrimaryTextColor() : Colors.grey,
                           BlendMode.srcIn,
                         ),
                       ),
@@ -713,7 +717,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                       icon: SvgPicture.asset(
                         'assets/icons/search_icon.svg',
                         colorFilter: ColorFilter.mode(
-                          widget.selectedIndex == 1 ? Colors.white : Colors.grey,
+                          widget.selectedIndex == 1 ? themeProvider.getPrimaryTextColor() : Colors.grey,
                           BlendMode.srcIn,
                         ),
                       ),
@@ -723,7 +727,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                       icon: SvgPicture.asset(
                         'assets/icons/library_icon.svg',
                         colorFilter: ColorFilter.mode(
-                          widget.selectedIndex == 2 ? Colors.white : Colors.grey,
+                          widget.selectedIndex == 2 ? themeProvider.getPrimaryTextColor() : Colors.grey,
                           BlendMode.srcIn,
                         ),
                       ),
@@ -733,7 +737,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                       icon: SvgPicture.asset(
                         'assets/icons/profile_icon.svg',
                         colorFilter: ColorFilter.mode(
-                          widget.selectedIndex == 3 ? Colors.white : Colors.grey,
+                          widget.selectedIndex == 3 ? themeProvider.getPrimaryTextColor() : Colors.grey,
                           BlendMode.srcIn,
                         ),
                       ),
@@ -772,7 +776,7 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: themeProvider.getPrimaryTextColor(),
                         ),
                       ),
                       SizedBox(height: 16),

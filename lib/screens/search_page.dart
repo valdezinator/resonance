@@ -4,6 +4,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../widgets/bottom_player.dart';
 import '../widgets/floating_player_mixin.dart';
 import 'dart:ui';
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
 
 class SearchPage extends StatefulWidget {
   final Map<String, dynamic>? currentSong;
@@ -113,6 +115,7 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
   }
 
   Widget _buildSearchBar() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -121,10 +124,10 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
       ),
       child: TextField(
         controller: _searchController,
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: themeProvider.getPrimaryTextColor()),
         decoration: InputDecoration(
           hintText: 'What do you want to listen to?',
-          hintStyle: TextStyle(color: Colors.grey[400]),
+          hintStyle: TextStyle(color: themeProvider.getSecondaryTextColor()),
           prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
           suffixIcon: Icon(Icons.mic, color: Colors.grey[400]),
           border: InputBorder.none,
@@ -405,9 +408,11 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Scaffold(
+      backgroundColor: themeProvider.backgroundColor,
       body: Container(
-        color: const Color(0xFF121212),
         child: Stack(
           children: [
             SafeArea(

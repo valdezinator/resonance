@@ -8,7 +8,8 @@ import 'dart:ui';
 import 'dart:io';
 import 'package:google_fonts/google_fonts.dart';
 import 'library_page.dart';
-
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
 
 class AlbumDetailsPage extends StatefulWidget {
   final Map<String, dynamic> album;
@@ -171,9 +172,10 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
 
   @override
   Widget build(BuildContext context) {
-
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Scaffold(
-      backgroundColor: const Color(0xFF0C0F14),
+      backgroundColor: themeProvider.backgroundColor,
       body: Stack(
         children: [
           Container(
@@ -468,12 +470,12 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                           Expanded(
                             child: Text(
                               'Title',
-                              style: TextStyle(color: Colors.grey),
+                              style: TextStyle(color: themeProvider.getPrimaryTextColor()),
                             ),
                           ),
                           Text(
                             'Duration',
-                            style: TextStyle(color: Colors.grey),
+                            style: TextStyle(color: themeProvider.getPrimaryTextColor()),
                           ),
                         ],
                       ),

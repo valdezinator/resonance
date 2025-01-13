@@ -40,4 +40,17 @@ class ThemeProvider with ChangeNotifier {
   Color get surfaceColor => _isDarkMode ? darkSurfaceColor : lightSurfaceColor;
   Color get textColor => _isDarkMode ? darkTextColor : lightTextColor;
   Color get secondaryTextColor => _isDarkMode ? darkSecondaryTextColor : lightSecondaryTextColor;
+
+  // Helper methods for getting text colors
+  Color getTextColor(Color lightColor, Color darkColor) {
+    return _isDarkMode ? darkColor : lightColor;
+  }
+
+  Color getPrimaryTextColor() {
+    return _isDarkMode ? darkTextColor : Colors.black;
+  }
+
+  Color getSecondaryTextColor() {
+    return _isDarkMode ? darkSecondaryTextColor : Colors.black54;
+  }
 }
