@@ -23,6 +23,8 @@ import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'screens/profile_image_page.dart';
+import 'providers/theme_provider.dart';
+import 'package:provider/provider.dart';  // Add this line
 
 class MyApp extends StatelessWidget {
   final User? user;
@@ -170,8 +172,10 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 20, 25, 34),
+      backgroundColor: themeProvider.backgroundColor,
       // backgroundColor: Colors.white10,
       body: SafeArea(
         child: Stack(

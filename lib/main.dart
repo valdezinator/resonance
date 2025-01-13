@@ -9,6 +9,8 @@ import 'config/supabase_config.dart';
 import 'login_page.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'config/auth_config.dart';
+import 'package:provider/provider.dart';
+import 'providers/theme_provider.dart';
 
 Future<void> main() async {
   try {
@@ -26,7 +28,12 @@ Future<void> main() async {
       anonKey: SupabaseConfig.anonKey,
     );
 
-    runApp(const AuthApp());
+    runApp(
+      ChangeNotifierProvider(
+        create: (_) => ThemeProvider(),
+        child: const AuthApp(),
+      ),
+    );
   } catch (e) {
     print('Initialization error: $e');
     rethrow;
@@ -38,17 +45,21 @@ class AuthApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Resonance',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0C0F14),
-        textTheme: GoogleFonts.montserratTextTheme(),
-      ),
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const AuthWrapper(),
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Resonance',
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: themeProvider.backgroundColor,
+            textTheme: GoogleFonts.montserratTextTheme(),
+          ),
+          initialRoute: '/',
+          routes: {
+            '/': (context) => const AuthWrapper(),
+          },
+        );
       },
     );
   }

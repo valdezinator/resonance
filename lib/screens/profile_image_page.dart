@@ -9,6 +9,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'privacy_settings_page.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../providers/theme_provider.dart';
+import 'package:provider/provider.dart';
 
 class ProfileImagePage extends StatefulWidget {
   final MusicService musicService;
@@ -38,6 +40,7 @@ class _ProfileImagePageState extends State<ProfileImagePage> {
     super.initState();
     _loadProfileImage();
     _loadPrivacySettings();
+    _loadThemePreference();
   }
 
   Future<void> _loadProfileImage() async {
@@ -52,6 +55,11 @@ class _ProfileImagePageState extends State<ProfileImagePage> {
     setState(() {
       _showListeningActivity = prefs.getBool('show_listening_activity') ?? true;
     });
+  }
+
+  Future<void> _loadThemePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    _darkMode.value = prefs.getBool('dark_mode') ?? true;
   }
 
   Future<void> _pickImage() async {
@@ -247,11 +255,16 @@ class _ProfileImagePageState extends State<ProfileImagePage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 20, 25, 34),
+      backgroundColor: themeProvider.backgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: Text('Profile', style: TextStyle(color: Colors.white)),
+        title: Text(
+          'Profile',
+          style: TextStyle(color: themeProvider.textColor),
+        ),
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -294,7 +307,7 @@ class _ProfileImagePageState extends State<ProfileImagePage> {
             Text(
               currentUser?.displayName ?? 'User',
               style: TextStyle(
-                color: Colors.white,
+                color: themeProvider.textColor,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
@@ -302,7 +315,7 @@ class _ProfileImagePageState extends State<ProfileImagePage> {
             Text(
               currentUser?.email ?? '',
               style: TextStyle(
-                color: Colors.white70,
+                color: themeProvider.secondaryTextColor,
                 fontSize: 16,
               ),
             ),
@@ -430,6 +443,50 @@ class _ProfileImagePageState extends State<ProfileImagePage> {
     String subtitle,
     String iconPath,
   ) {
+    if (title == 'Dark Mode') {
+      return ValueListenableBuilder<bool>(
+        valueListenable: notifier,
+        builder: (context, value, child) {
+          return ListTile(
+            leading: SvgPicture.asset(
+              iconPath,
+              width: 24,
+              height: 24,
+              colorFilter: ColorFilter.mode(
+                Provider.of<ThemeProvider>(context).textColor,
+                BlendMode.srcIn,
+              ),
+            ),
+            title: Text(
+              title,
+              style: TextStyle(
+                color: Provider.of<ThemeProvider>(context).textColor,
+                fontSize: 16,
+              ),
+            ),
+            subtitle: Text(
+              subtitle,
+              style: TextStyle(
+                color: Provider.of<ThemeProvider>(context).secondaryTextColor,
+                fontSize: 12,
+              ),
+            ),
+            trailing: Switch(
+              value: value,
+              onChanged: (newValue) async {
+                notifier.value = newValue;
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('dark_mode', newValue);
+                Provider.of<ThemeProvider>(context, listen: false).toggleTheme();
+              },
+              activeColor: Colors.blue,
+            ),
+          );
+        },
+      );
+    }
+
+    // Default case for other settings
     return ValueListenableBuilder<bool>(
       valueListenable: notifier,
       builder: (context, value, child) {
@@ -438,15 +495,24 @@ class _ProfileImagePageState extends State<ProfileImagePage> {
             iconPath,
             width: 24,
             height: 24,
-            colorFilter: ColorFilter.mode(Colors.white70, BlendMode.srcIn),
+            colorFilter: ColorFilter.mode(
+              Provider.of<ThemeProvider>(context).textColor,
+              BlendMode.srcIn,
+            ),
           ),
           title: Text(
             title,
-            style: TextStyle(color: Colors.white, fontSize: 16),
+            style: TextStyle(
+              color: Provider.of<ThemeProvider>(context).textColor,
+              fontSize: 16,
+            ),
           ),
           subtitle: Text(
             subtitle,
-            style: TextStyle(color: Colors.white60, fontSize: 12),
+            style: TextStyle(
+              color: Provider.of<ThemeProvider>(context).secondaryTextColor,
+              fontSize: 12,
+            ),
           ),
           trailing: Switch(
             value: value,
