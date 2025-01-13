@@ -7,7 +7,7 @@ import 'encrypted_storage_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:convert';
-
+import 'play_history_service.dart';
 
 class MusicService {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -21,6 +21,7 @@ class MusicService {
   final _currentSongController =
       StreamController<Map<String, dynamic>>.broadcast();
   final EncryptedStorageService _encryptedStorage = EncryptedStorageService();
+  final PlayHistoryService _playHistoryService = PlayHistoryService();
 
   static const String ALBUMS_CACHE_KEY = 'albums_cache';
   static const String ARTISTS_CACHE_KEY = 'artists_cache';
@@ -216,6 +217,11 @@ class MusicService {
       Map<String, dynamic>? nextSong,
       List<Map<String, dynamic>>? subsequentSongs}) async {
     try {
+      // Track the played song
+      if (currentSong != null) {
+        await _playHistoryService.addToHistory(currentSong);
+      }
+      
       final playlist = ConcatenatingAudioSource(children: []);
       
       // Handle current song
@@ -592,21 +598,11 @@ class MusicService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getRecentlyPlayed() async {
+  Future<List<Map<String, dynamic>>> getRecentlyPlayed({int limit = 20}) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_pythonApiBaseUrl/recently-played/$_userId'),
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return List<Map<String, dynamic>>.from(data);
-      } else {
-        throw Exception('Failed to load recently played songs');
-      }
+      return await _playHistoryService.getRecentlyPlayed(limit: limit);
     } catch (e) {
-      print('Error getting recently played songs: $e');
-      // Fallback to existing implementation or return empty list
+      print('Error getting recently played: $e');
       return [];
     }
   }
@@ -1428,6 +1424,15 @@ class MusicService {
     } catch (e) {
       print('Error downloading album: $e');
       rethrow;
+    }
+  }
+
+  // Add this new method
+  Future<void> clearPlayHistory() async {
+    try {
+      await _playHistoryService.clearHistory();
+    } catch (e) {
+      print('Error clearing play history: $e');
     }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PrivacySettingsPage extends StatefulWidget {
   const PrivacySettingsPage({Key? key}) : super(key: key);
@@ -9,12 +10,36 @@ class PrivacySettingsPage extends StatefulWidget {
 }
 
 class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
+  // Add this constant
+  static const String LISTENING_ACTIVITY_KEY = 'show_listening_activity';
+
   // Privacy settings state
   bool _showListeningActivity = true;
   bool _showRecentlyPlayed = true;
   bool _allowDataCollection = true;
   bool _enableTwoFactor = false;
   bool _showProfileToPublic = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _showListeningActivity = prefs.getBool(LISTENING_ACTIVITY_KEY) ?? true;
+    });
+  }
+
+  Future<void> _updateListeningActivity(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(LISTENING_ACTIVITY_KEY, value);
+    setState(() {
+      _showListeningActivity = value;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +68,7 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
             title: 'Show Listening Activity',
             subtitle: 'Let followers see what you\'re playing',
             value: _showListeningActivity,
-            onChanged: (value) => setState(() => _showListeningActivity = value),
+            onChanged: (value) => _updateListeningActivity(value),
             icon: 'assets/icons/listening.svg',
           ),
           _buildSwitchTile(

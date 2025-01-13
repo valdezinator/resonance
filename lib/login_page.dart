@@ -20,6 +20,9 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'screens/library_page.dart';
 import 'dart:ui';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
+import 'screens/profile_image_page.dart';
 
 class MyApp extends StatelessWidget {
   final User? user;
@@ -48,6 +51,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final MusicService _musicService = MusicService();
+  String? _profileImagePath;
   Map<String, dynamic>? currentSong;
   late Future<List<Map<String, dynamic>>> _songsFuture;
   late Future<List<Map<String, dynamic>>> _albumsFuture;
@@ -66,6 +70,14 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _initServices();
+    _loadProfileImage();
+  }
+
+  Future<void> _loadProfileImage() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _profileImagePath = prefs.getString('profile_image');
+    });
   }
 
   Future<void> _initServices() async {
@@ -199,202 +211,208 @@ class _HomePageState extends State<HomePage> {
                           },
                         )
                       : _selectedIndex == 3
-                      ? SettingsPage(
-                          currentSong: currentSong,
-                          onSongPlay: (song) {
-                            setState(() {
-                              currentSong = song;
-                            });
-                          },
-                          musicService: _musicService,
-                          selectedIndex: _selectedIndex,  // Add this
-                          onIndexChanged: (index) {      // Add this
-                            setState(() {
-                              _selectedIndex = index;
-                            });
-                          },
-                        )
-                      : SingleChildScrollView(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Header with greeting
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                          ? ProfileImagePage(
+                              musicService: _musicService,
+                            )
+                          : SingleChildScrollView(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // Header with greeting
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Good morning,\n Peter✨',
+                                          // style: TextStyle(
+                                          //   color: Colors.white,
+                                          //   fontSize: 24,
+                                          //   fontWeight: FontWeight.bold,
+                                          // ),
+                                          style: GoogleFonts.montserrat(
+                                            color: Colors.white,
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        GestureDetector(
+                                          onTap: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => ProfileImagePage(
+                                                  musicService: _musicService,
+                                                ),
+                                              ),
+                                            ).then((_) => _loadProfileImage());
+                                          },
+                                          child: CircleAvatar(
+                                            radius: 20,
+                                            backgroundImage: _profileImagePath != null
+                                                ? FileImage(File(_profileImagePath!))
+                                                : null,
+                                            child: _profileImagePath == null
+                                                ? Icon(Icons.person,
+                                                    color: Colors.white)
+                                                : null,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 20),
+
+                                    // Chips row
+                                    Row(
+                                      children: [
+                                        Chip(
+                                          label: Text('Feel Good',
+                                              style:
+                                                  TextStyle(color: Colors.white)),
+                                          backgroundColor: Colors.grey[800],
+                                        ),
+                                        SizedBox(width: 8),
+                                        Chip(
+                                          label: Text('Party',
+                                              style:
+                                                  TextStyle(color: Colors.white)),
+                                          backgroundColor: Colors.grey[800],
+                                        ),
+                                        SizedBox(width: 8),
+                                        Chip(
+                                          label: Text('Party',
+                                              style:
+                                                  TextStyle(color: Colors.white)),
+                                          backgroundColor: Colors.grey[800],
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 24),
+
+                                    // Quick Play section
                                     Text(
-                                      'Good morning,\n Peter✨',
-                                      // style: TextStyle(
-                                      //   color: Colors.white,
-                                      //   fontSize: 24,
-                                      //   fontWeight: FontWeight.bold,
-                                      // ),
+                                      'Quick Play',
                                       style: GoogleFonts.montserrat(
                                         color: Colors.white,
                                         fontSize: 24,
-                                        fontWeight: FontWeight.bold,
+                                        fontWeight: FontWeight.normal,
                                       ),
                                     ),
-                                    CircleAvatar(
-                                      backgroundColor: Colors.blue[900],
-                                      radius: 20,
+                                    SizedBox(height: 16),
+
+                                    // Grid of songs from Supabase
+                                    _buildSongsList(),
+
+                                    SizedBox(height: 24),
+
+                                    // Just the Hits section
+                                    Text(
+                                      'Just the Hits',
+                                      style: GoogleFonts.montserrat(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.normal,
+                                      ),
                                     ),
+                                    SizedBox(height: 16),
+
+                                    // Albums list
+                                    SizedBox(
+                                      height: 220,
+                                      child:
+                                          FutureBuilder<List<Map<String, dynamic>>>(
+                                        future: _albumsFuture,
+                                        builder: (context, snapshot) {
+                                          if (snapshot.connectionState ==
+                                              ConnectionState.waiting) {
+                                            return Center(
+                                                child: CircularProgressIndicator());
+                                          }
+
+                                          if (snapshot.hasError) {
+                                            return Text(
+                                              'Error loading albums: ${snapshot.error}',
+                                              style: TextStyle(color: Colors.red),
+                                            );
+                                          }
+
+                                          final albums = snapshot.data ?? [];
+
+                                          return ListView.builder(
+                                            scrollDirection: Axis.horizontal,
+                                            itemCount: albums.length,
+                                            itemBuilder: (context, index) {
+                                              return _buildAlbumTile(albums[index]);
+                                            },
+                                          );
+                                        },
+                                      ),
+                                    ),
+
+                                    // Recommended Artists section
+                                    SizedBox(height: 32),
+
+                                    // Recommended Artists section
+                                    Text(
+                                      'Recommended Artists',
+                                      style: GoogleFonts.montserrat(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.normal,
+                                      ),
+                                    ),
+                                    SizedBox(height: 16),
+
+                                    // Artists list
+                                    SizedBox(
+                                      height: 160,
+                                      child:
+                                          FutureBuilder<List<Map<String, dynamic>>>(
+                                        future: _artistsFuture,
+                                        builder: (context, snapshot) {
+                                          if (snapshot.connectionState ==
+                                              ConnectionState.waiting) {
+                                            return Center(
+                                                child: CircularProgressIndicator());
+                                          }
+
+                                          if (snapshot.hasError) {
+                                            return Text(
+                                              'Error loading artists: ${snapshot.error}',
+                                              style: TextStyle(color: Colors.red),
+                                            );
+                                          }
+
+                                          final artists = snapshot.data ?? [];
+
+                                          return ListView.builder(
+                                            scrollDirection: Axis.horizontal,
+                                            itemCount: artists.length,
+                                            itemBuilder: (context, index) {
+                                              return _buildArtistTile(
+                                                  artists[index]);
+                                            },
+                                          );
+                                        },
+                                      ),
+                                    ),
+
+                                    SizedBox(height: 32),
+                                    _buildRecentlyPlayed(),
+
+                                    SizedBox(height: 32),
+                                    _buildMadeForYou(),
+
+                                    SizedBox(height: 32),
+                                    _buildTopCharts(),
+
+                                    // Bottom navigation bar will be handled separately
                                   ],
                                 ),
-                                const SizedBox(height: 20),
-
-                                // Chips row
-                                Row(
-                                  children: [
-                                    Chip(
-                                      label: Text('Feel Good',
-                                          style:
-                                              TextStyle(color: Colors.white)),
-                                      backgroundColor: Colors.grey[800],
-                                    ),
-                                    SizedBox(width: 8),
-                                    Chip(
-                                      label: Text('Party',
-                                          style:
-                                              TextStyle(color: Colors.white)),
-                                      backgroundColor: Colors.grey[800],
-                                    ),
-                                    SizedBox(width: 8),
-                                    Chip(
-                                      label: Text('Party',
-                                          style:
-                                              TextStyle(color: Colors.white)),
-                                      backgroundColor: Colors.grey[800],
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 24),
-
-                                // Quick Play section
-                                Text(
-                                  'Quick Play',
-                                  style: GoogleFonts.montserrat(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                                ),
-                                SizedBox(height: 16),
-
-                                // Grid of songs from Supabase
-                                _buildSongsList(),
-
-                                SizedBox(height: 24),
-
-                                // Just the Hits section
-                                Text(
-                                  'Just the Hits',
-                                  style: GoogleFonts.montserrat(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                                ),
-                                SizedBox(height: 16),
-
-                                // Albums list
-                                SizedBox(
-                                  height: 220,
-                                  child:
-                                      FutureBuilder<List<Map<String, dynamic>>>(
-                                    future: _albumsFuture,
-                                    builder: (context, snapshot) {
-                                      if (snapshot.connectionState ==
-                                          ConnectionState.waiting) {
-                                        return Center(
-                                            child: CircularProgressIndicator());
-                                      }
-
-                                      if (snapshot.hasError) {
-                                        return Text(
-                                          'Error loading albums: ${snapshot.error}',
-                                          style: TextStyle(color: Colors.red),
-                                        );
-                                      }
-
-                                      final albums = snapshot.data ?? [];
-
-                                      return ListView.builder(
-                                        scrollDirection: Axis.horizontal,
-                                        itemCount: albums.length,
-                                        itemBuilder: (context, index) {
-                                          return _buildAlbumTile(albums[index]);
-                                        },
-                                      );
-                                    },
-                                  ),
-                                ),
-
-                                // Recommended Artists section
-                                SizedBox(height: 32),
-
-                                // Recommended Artists section
-                                Text(
-                                  'Recommended Artists',
-                                  style: GoogleFonts.montserrat(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                                ),
-                                SizedBox(height: 16),
-
-                                // Artists list
-                                SizedBox(
-                                  height: 160,
-                                  child:
-                                      FutureBuilder<List<Map<String, dynamic>>>(
-                                    future: _artistsFuture,
-                                    builder: (context, snapshot) {
-                                      if (snapshot.connectionState ==
-                                          ConnectionState.waiting) {
-                                        return Center(
-                                            child: CircularProgressIndicator());
-                                      }
-
-                                      if (snapshot.hasError) {
-                                        return Text(
-                                          'Error loading artists: ${snapshot.error}',
-                                          style: TextStyle(color: Colors.red),
-                                        );
-                                      }
-
-                                      final artists = snapshot.data ?? [];
-
-                                      return ListView.builder(
-                                        scrollDirection: Axis.horizontal,
-                                        itemCount: artists.length,
-                                        itemBuilder: (context, index) {
-                                          return _buildArtistTile(
-                                              artists[index]);
-                                        },
-                                      );
-                                    },
-                                  ),
-                                ),
-
-                                SizedBox(height: 32),
-                                _buildRecentlyPlayed(),
-
-                                SizedBox(height: 32),
-                                _buildMadeForYou(),
-
-                                SizedBox(height: 32),
-                                _buildTopCharts(),
-
-                                // Bottom navigation bar will be handled separately
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
             ),
             _buildFloatingBottomPlayer(),
           ],
@@ -457,16 +475,16 @@ class _HomePageState extends State<HomePage> {
                   ),
                   label: 'Library',
                 ),
-                BottomNavigationBarItem(
-                  icon: SvgPicture.asset(
-                    'assets/icons/profile_icon.svg',
-                    colorFilter: ColorFilter.mode(
-                      _selectedIndex == 3 ? Colors.white : Colors.grey,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  label: 'Profile',
-                ),
+                // BottomNavigationBarItem(
+                //   icon: SvgPicture.asset(
+                //     'assets/icons/profile_icon.svg',
+                //     colorFilter: ColorFilter.mode(
+                //       _selectedIndex == 3 ? Colors.white : Colors.grey,
+                //       BlendMode.srcIn,
+                //     ),
+                //   ),
+                //   label: 'Profile',
+                // ),
               ],
             ),
           ),
