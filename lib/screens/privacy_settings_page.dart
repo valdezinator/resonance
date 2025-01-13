@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 class PrivacySettingsPage extends StatefulWidget {
   const PrivacySettingsPage({Key? key}) : super(key: key);
@@ -39,6 +41,37 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
     setState(() {
       _showListeningActivity = value;
     });
+  }
+
+  // Add this method to clear cache
+  Future<void> _clearCache() async {
+    try {
+      // Clear shared preferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // Clear network image cache
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
+      // Clear cached network image directory
+      final tempDir = await getTemporaryDirectory();
+      if (tempDir.existsSync()) {
+        await Future.wait(
+          tempDir.listSync(recursive: true).map((entity) async {
+            if (entity is File) {
+              try {
+                await entity.delete();
+              } catch (e) {
+                print('Error deleting file: ${entity.path}');
+              }
+            }
+          }),
+        );
+      }
+    } catch (e) {
+      throw Exception('Failed to clear cache: $e');
+    }
   }
 
   @override
@@ -135,12 +168,44 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                       child: Text('Cancel'),
                     ),
                     TextButton(
-                      onPressed: () {
-                        // TODO: Implement cache clearing logic
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Cache cleared')),
-                        );
+                      onPressed: () async {
+                        try {
+                          Navigator.pop(context);
+                          // Show loading indicator
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (BuildContext context) {
+                              return Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            },
+                          );
+
+                          await _clearCache();
+                          
+                          // Remove loading indicator
+                          Navigator.of(context).pop();
+                          
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Cache cleared successfully'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        } catch (e) {
+                          // Remove loading indicator if still showing
+                          if (Navigator.canPop(context)) {
+                            Navigator.of(context).pop();
+                          }
+                          
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to clear cache: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       },
                       child: Text('Clear'),
                     ),
@@ -234,7 +299,74 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
         style: TextStyle(color: Colors.white60, fontSize: 12),
       ),
       trailing: Icon(Icons.chevron_right, color: Colors.white70),
-      onTap: onTap,
+      onTap: () {
+        if (title == 'Clear Cache') {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: Colors.grey[900],
+              title: Text(
+                'Clear Cache',
+                style: TextStyle(color: Colors.white),
+              ),
+              content: Text(
+                'This will clear all cached data. Continue?',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      Navigator.pop(context);
+                      // Show loading indicator
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (BuildContext context) {
+                          return Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        },
+                      );
+
+                      await _clearCache();
+                      
+                      // Remove loading indicator
+                      Navigator.of(context).pop();
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Cache cleared successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } catch (e) {
+                      // Remove loading indicator if still showing
+                      if (Navigator.canPop(context)) {
+                        Navigator.of(context).pop();
+                      }
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to clear cache: ${e.toString()}'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  child: Text('Clear'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          onTap();
+        }
+      },
     );
   }
 }

@@ -56,7 +56,6 @@ class _HomePageState extends State<HomePage> {
   late Future<List<Map<String, dynamic>>> _songsFuture;
   late Future<List<Map<String, dynamic>>> _albumsFuture;
   late Future<List<Map<String, dynamic>>> _artistsFuture;
-  late Future<List<Map<String, dynamic>>> _recentlyPlayedFuture;
   late Future<List<Map<String, dynamic>>> _personalizedPlaylistsFuture;
   late Future<List<Map<String, dynamic>>> _topChartsFuture;
   int _selectedIndex = 0;
@@ -86,7 +85,6 @@ class _HomePageState extends State<HomePage> {
       _loadMoreSongs();
       _albumsFuture = _musicService.getAlbums();
       _artistsFuture = _musicService.getRecommendedArtists();
-      _recentlyPlayedFuture = _musicService.getRecentlyPlayed();
       _personalizedPlaylistsFuture = _musicService.getPersonalizedPlaylists();
       _topChartsFuture = _musicService.getTopCharts();
     } catch (e) {
@@ -400,8 +398,6 @@ class _HomePageState extends State<HomePage> {
                                     ),
 
                                     SizedBox(height: 32),
-                                    _buildRecentlyPlayed(),
-
                                     SizedBox(height: 32),
                                     _buildMadeForYou(),
 
@@ -807,123 +803,6 @@ class _HomePageState extends State<HomePage> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildRecentlyPlayed() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Recently Played',
-          style: GoogleFonts.montserrat(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        SizedBox(height: 16),
-        SizedBox(
-          height: 180,
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _musicService.getRecentlyPlayed(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(child: CircularProgressIndicator());
-              }
-
-              if (snapshot.hasError) {
-                return Text('Error: ${snapshot.error}',
-                    style: TextStyle(color: Colors.red));
-              }
-
-              final songs = snapshot.data ?? [];
-              if (songs.isEmpty) {
-                return Center(
-                  child: Text(
-                    'No recently played songs',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                );
-              }
-
-              return ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: songs.length,
-                itemBuilder: (context, index) {
-                  final song = songs[index]['songs'];
-                  return GestureDetector(
-                    onTap: () async {
-                      try {
-                        setState(() {
-                          currentSong = song;
-                        });
-                        await _musicService.playSong(
-                          song['audio_url'],
-                          currentSong: song,
-                        );
-                      } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Failed to play song: ${e.toString()}'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    },
-                    child: Container(
-                      width: 140,
-                      margin: EdgeInsets.only(right: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: CachedNetworkImage(
-                              imageUrl: song['image_url'] ?? '',
-                              width: 140,
-                              height: 140,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: Colors.grey[900],
-                                child: Center(child: CircularProgressIndicator()),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.grey[900],
-                                child: Icon(Icons.music_note),
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            song['title'] ?? 'Unknown Title',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            song['artist'] ?? 'Unknown Artist',
-                            style: TextStyle(
-                              color: Colors.grey[400],
-                              fontSize: 12,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
 
