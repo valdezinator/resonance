@@ -28,15 +28,19 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
   bool _isSeeking = false;
   bool _isShuffleEnabled = false;
   LoopMode _loopMode = LoopMode.off;
+  Map<String, dynamic>? _currentSongState;
 
   @override
   void initState() {
     super.initState();
+    _currentSongState = widget.currentSong;
     _loadImagePalette();
 
-    // Listen for song changes
     widget.musicService.currentSongStream.listen((newSong) {
-      if (mounted && newSong != null && newSong != widget.currentSong) {
+      if (mounted && newSong != null) {
+        setState(() {
+          _currentSongState = newSong;
+        });
         widget.onSongChange(newSong);
         _loadImagePalette();
       }
@@ -62,16 +66,14 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
 
   Widget _buildAlbumArt() {
     return FutureBuilder<String?>(
-      future: widget.musicService.getCachedImagePath(widget.currentSong['id']),
+      future: widget.musicService.getCachedImagePath(_currentSongState?['id'] ?? ''),
       builder: (context, snapshot) {
         if (snapshot.hasData && snapshot.data != null) {
-          // Use cached image
           final imageProvider = FileImage(File(snapshot.data!));
-          // Load palette from cached image
           _loadPaletteFromProvider(imageProvider);
           
           return Hero(
-            tag: 'album_art_${widget.currentSong['id']}',
+            tag: 'album_art_${_currentSongState?['id']}',
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image(
@@ -81,12 +83,11 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
             ),
           );
         }
-        // Fallback to network image
-        final networkImageProvider = NetworkImage(widget.currentSong['image_url']);
+        final networkImageProvider = NetworkImage(_currentSongState?['image_url'] ?? '');
         _loadPaletteFromProvider(networkImageProvider);
         
         return Hero(
-          tag: 'album_art_${widget.currentSong['id']}',
+          tag: 'album_art_${_currentSongState?['id']}',
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Image(
@@ -125,13 +126,11 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
   @override
   Widget build(BuildContext context) {
     final dominantColor = _palette?.dominantColor?.color ?? Colors.purple;
-    // Update textColor to be fully opaque
     final textColor = Colors.white;
 
     return Scaffold(
       body: Stack(
         children: [
-          // Background blobs
           Positioned(
             top: -100,
             right: -100,
@@ -170,7 +169,6 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
               ),
             ),
           ),
-          // Main content
           Container(
             decoration: const BoxDecoration(
               color: Color(0xFF0C0F14),
@@ -178,7 +176,6 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
             child: SafeArea(
               child: Column(
                 children: [
-                  // Header
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Row(
@@ -219,7 +216,6 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                       ),
                                       child: Column(
                                         children: [
-                                          // Handle bar
                                           Container(
                                             margin: const EdgeInsets.only(top: 8),
                                             width: 40,
@@ -253,7 +249,6 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                               ],
                                             ),
                                           ),
-                                          // Queue list would go here
                                           Expanded(
                                             child: StreamBuilder<
                                                 List<Map<String, dynamic>>>(
@@ -261,17 +256,17 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                                   widget.musicService.queueStream,
                                               builder: (context, snapshot) {
                                                 if (snapshot.hasError) {
-                                                  print('Queue stream error: ${snapshot.error}');  // Debug log
+                                                  print('Queue stream error: ${snapshot.error}');
                                                   return Center(child: Text('Error loading queue'));
                                                 }
 
                                                 if (!snapshot.hasData) {
-                                                  print('No queue data available');  // Debug log
+                                                  print('No queue data available');
                                                   return const Center(child: CircularProgressIndicator());
                                                 }
 
                                                 final queue = snapshot.data!;
-                                                print('Queue length in UI: ${queue.length}');  // Debug log
+                                                print('Queue length in UI: ${queue.length}');
 
                                                 if (queue.isEmpty) {
                                                   return Center(child: Text('Queue is empty', style: TextStyle(color: Colors.grey)));
@@ -344,23 +339,19 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                       ],
                     ),
                   ),
-
-                  // Album Art
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(32.0),
-                      child: _buildAlbumArt(),  // Replace the existing Image.network with this
+                      child: _buildAlbumArt(),
                     ),
                   ),
-
-                  // Song Info
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          widget.currentSong['title'],
+                          _currentSongState?['title'] ?? '',
                           style: TextStyle(
                             color: textColor,
                             fontSize: 24,
@@ -369,7 +360,7 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          widget.currentSong['artist'],
+                          _currentSongState?['artist'] ?? '',
                           style: TextStyle(
                             color: textColor.withOpacity(0.7),
                             fontSize: 18,
@@ -378,8 +369,6 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                       ],
                     ),
                   ),
-
-                  // Progress Bar
                   Padding(
                     padding: const EdgeInsets.all(32.0),
                     child: StreamBuilder<Duration>(
@@ -412,8 +401,6 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                       },
                     ),
                   ),
-
-                  // Controls
                   Padding(
                     padding: const EdgeInsets.only(
                         left: 32.0, right: 32.0, bottom: 32.0),

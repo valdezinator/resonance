@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../widgets/bottom_player.dart';
 import '../services/music_service.dart';
 import '../widgets/floating_player_mixin.dart';
+import 'privacy_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   final Map<String, dynamic>? currentSong;
@@ -29,6 +30,13 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> with FloatingPlayerMixin {
   final User? currentUser = FirebaseAuth.instance.currentUser;
+
+  // Add settings state
+  final ValueNotifier<bool> _pushNotifications = ValueNotifier(true);
+  final ValueNotifier<bool> _darkMode = ValueNotifier(true);
+  final ValueNotifier<bool> _highQualityStreaming = ValueNotifier(false);
+  final ValueNotifier<bool> _autoPlay = ValueNotifier(true);
+  final ValueNotifier<bool> _downloadOverWifiOnly = ValueNotifier(true);
 
   Future<void> _handleSignOut(BuildContext context) async {
     try {
@@ -56,26 +64,39 @@ class _SettingsPageState extends State<SettingsPage> with FloatingPlayerMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF0c0f14),
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         title: Text(
           'Settings',
           style: TextStyle(
-            color: Colors.white, // This sets the text color to white
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        // backgroundColor: Color(0xFF2C2F33), // Dark background
-        backgroundColor: Colors.transparent,
+        centerTitle: true,
       ),
       body: ListView(
         children: [
-          // Profile Header
-          Padding(
-            padding: const EdgeInsets.all(20.0),
+          // Enhanced Profile Section
+          Container(
+            margin: EdgeInsets.all(20),
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade900, Colors.purple.shade900],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(15),
+            ),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 40,
-                  backgroundColor: Colors.blue[900],
+                  backgroundColor: Colors.white12,
                   backgroundImage: currentUser?.photoURL != null
                       ? NetworkImage(currentUser!.photoURL!)
                       : null,
@@ -83,66 +104,120 @@ class _SettingsPageState extends State<SettingsPage> with FloatingPlayerMixin {
                       ? Icon(Icons.person, size: 40, color: Colors.white)
                       : null,
                 ),
-                SizedBox(width: 16),
-                Text(
-                  currentUser?.displayName ?? 'User',
-                  style: TextStyle(color: Colors.white, fontSize: 20),
+                SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        currentUser?.displayName ?? 'User',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        currentUser?.email ?? '',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.edit, color: Colors.white70),
+                  onPressed: () {
+                    // TODO: Implement edit profile
+                  },
                 ),
               ],
             ),
           ),
+
+          _buildSectionHeader('Playback'),
+          _buildValueListenableBuilder(
+            _highQualityStreaming,
+            'High Quality Streaming',
+            'Stream music in highest quality',
+            'assets/icons/quality.svg',
+          ),
+          _buildValueListenableBuilder(
+            _autoPlay,
+            'AutoPlay',
+            'Automatically play similar songs',
+            'assets/icons/autoplay.svg',
+          ),
+
+          _buildSectionHeader('Downloads'),
+          _buildValueListenableBuilder(
+            _downloadOverWifiOnly,
+            'Download over Wi-Fi only',
+            'Save mobile data',
+            'assets/icons/wifi.svg',
+          ),
+
+          _buildSectionHeader('Notifications'),
+          _buildValueListenableBuilder(
+            _pushNotifications,
+            'Push Notifications',
+            'Stay updated with latest releases',
+            'assets/icons/notifications.svg',
+          ),
+
+          _buildSectionHeader('Appearance'),
+          _buildValueListenableBuilder(
+            _darkMode,
+            'Dark Mode',
+            'Toggle dark/light theme',
+            'assets/icons/moon.svg',
+          ),
+
           _buildSectionHeader('Account'),
           _buildListTile(
-            title: 'User Profile',
-            icon: 'assets/icons/user.svg',
-            onTap: () {
-              // Navigate to user profile
-            },
-          ),
-          _buildListTile(
-            title: 'Privacy & Safety',
+            title: 'Privacy & Security',
+            subtitle: 'Manage your account security',
             icon: 'assets/icons/privacy.svg',
             onTap: () {
-              // Navigate to privacy settings
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PrivacySettingsPage(),
+                ),
+              );
             },
           ),
-          _buildSectionHeader('App Settings'),
-          _buildSwitchTile(
-            title: 'Push Notifications',
-            icon: 'assets/icons/notifications.svg',
-            value: true, // Example value, replace with actual state
-            onChanged: (bool value) {
-              // Handle toggle
-            },
-          ),
-          _buildSwitchTile(
-            title: 'Dark Mode',
-            icon: 'assets/icons/moon.svg',
-            value: false, // Example value, replace with actual state
-            onChanged: (bool value) {
-              // Handle toggle
-            },
-          ),
-          const SizedBox(height: 20),
+
+          // Enhanced Logout Button
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: const EdgeInsets.all(20),
             child: ElevatedButton(
               onPressed: () => _handleSignOut(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: Colors.red.shade900,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text(
-                'Log Out',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.logout, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Log Out',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 100), // Bottom padding for player
         ],
       ),
     );
@@ -150,42 +225,79 @@ class _SettingsPageState extends State<SettingsPage> with FloatingPlayerMixin {
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
       child: Text(
-        title,
+        title.toUpperCase(),
         style: TextStyle(
-          fontSize: 18,
+          color: Colors.white70,
+          fontSize: 13,
           fontWeight: FontWeight.bold,
-          color: Colors.white,
+          letterSpacing: 1.2,
         ),
       ),
     );
   }
 
-  Widget _buildListTile(
-      {required String title,
-      required String icon,
-      required VoidCallback onTap}) {
-    return ListTile(
-      leading: SvgPicture.asset(icon, width: 24, height: 24),
-      title: Text(title, style: TextStyle(color: Colors.white)),
-      onTap: onTap,
+  Widget _buildValueListenableBuilder(
+    ValueNotifier<bool> notifier,
+    String title,
+    String subtitle,
+    String iconPath,
+  ) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: notifier,
+      builder: (context, value, child) {
+        return ListTile(
+          leading: SvgPicture.asset(
+            iconPath,
+            width: 24,
+            height: 24,
+            colorFilter: ColorFilter.mode(
+              Colors.white70,
+              BlendMode.srcIn,
+            ),
+          ),
+          title: Text(
+            title,
+            style: TextStyle(color: Colors.white, fontSize: 16),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: TextStyle(color: Colors.white60, fontSize: 12),
+          ),
+          trailing: Switch(
+            value: value,
+            onChanged: (newValue) => notifier.value = newValue,
+            activeColor: Colors.blue,
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildSwitchTile(
-      {required String title,
-      required String icon,
-      required bool value,
-      required ValueChanged<bool> onChanged}) {
+  Widget _buildListTile({
+    required String title,
+    required String subtitle,
+    required String icon,
+    required VoidCallback onTap,
+  }) {
     return ListTile(
-      leading: SvgPicture.asset(icon, width: 24, height: 24),
-      title: Text(title, style: TextStyle(color: Colors.white)),
-      trailing: Switch(
-        value: value,
-        onChanged: onChanged,
-        activeColor: Colors.blue,
+      leading: SvgPicture.asset(
+        icon,
+        width: 24,
+        height: 24,
+        colorFilter: ColorFilter.mode(Colors.white70, BlendMode.srcIn),
       ),
+      title: Text(
+        title,
+        style: TextStyle(color: Colors.white, fontSize: 16),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(color: Colors.white60, fontSize: 12),
+      ),
+      trailing: Icon(Icons.chevron_right, color: Colors.white70),
+      onTap: onTap,
     );
   }
 }

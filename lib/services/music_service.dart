@@ -49,6 +49,9 @@ class MusicService {
     return userId;
   }
 
+  // Add this getter
+  SupabaseClient get supabase => _supabase;
+
   MusicService() {
     _playlist = ConcatenatingAudioSource(children: []);
   }

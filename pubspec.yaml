@@ -99,3 +99,10 @@ flutter:
     - .env
     - assets/song2.jpg
     - assets/icons/
+    # - assets/icons/listening.svg
+    # - assets/icons/history.svg
+    # - assets/icons/security.svg
+    # - assets/icons/password.svg
+    # - assets/icons/data.svg
+    # - assets/icons/clear.svg
+    # - assets/icons/profile.svg
