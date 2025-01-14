@@ -733,16 +733,6 @@ class _ArtistDetailsPageState extends State<ArtistDetailsPage>
                       ),
                       label: 'Library',
                     ),
-                    BottomNavigationBarItem(
-                      icon: SvgPicture.asset(
-                        'assets/icons/profile_icon.svg',
-                        colorFilter: ColorFilter.mode(
-                          widget.selectedIndex == 3 ? themeProvider.getPrimaryTextColor() : Colors.grey,
-                          BlendMode.srcIn,
-                        ),
-                      ),
-                      label: 'Profile',
-                    ),
                   ],
                 ),
               ),

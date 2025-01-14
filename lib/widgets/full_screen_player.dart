@@ -4,6 +4,7 @@ import 'package:palette_generator/palette_generator.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import '../services/music_service.dart';
 import 'dart:io';
+import 'package:flutter_svg/flutter_svg.dart';  // Add this import
 
 class FullScreenPlayer extends StatefulWidget {
   final MusicService musicService;
@@ -35,6 +36,7 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
     super.initState();
     _currentSongState = widget.currentSong;
     _loadImagePalette();
+    _initializePlayerState();
 
     widget.musicService.currentSongStream.listen((newSong) {
       if (mounted && newSong != null) {
@@ -44,6 +46,14 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
         widget.onSongChange(newSong);
         _loadImagePalette();
       }
+    });
+  }
+
+  Future<void> _initializePlayerState() async {
+    // Get initial shuffle state from music service
+    final shuffleMode = await widget.musicService.getShuffleMode();
+    setState(() {
+      _isShuffleEnabled = shuffleMode;
     });
   }
 
@@ -123,6 +133,45 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
     return isActive ? Colors.green : defaultColor;
   }
 
+  Widget _buildProgressBar(Duration position, Duration duration, Color textColor) {
+    return Column(
+      children: [
+        ProgressBar(
+          progress: position,
+          total: duration,
+          buffered: duration,
+          onSeek: (duration) {
+            widget.musicService.seek(duration);
+          },
+          baseBarColor: const Color.fromARGB(255, 23, 80, 42).withOpacity(0.2),
+          progressBarColor: const Color.fromARGB(255, 21, 112, 44),
+          bufferedBarColor: const Color.fromARGB(255, 107, 119, 139).withOpacity(0.3),
+          thumbRadius: 0,
+          barHeight: 6, // Increased thickness
+          timeLabelTextStyle: TextStyle(color: textColor),
+          timeLabelPadding: 10, // Add padding between bar and labels
+        ),
+        const SizedBox(height: 16), // Add space after progress bar
+      ],
+    );
+  }
+
+  Widget _buildControlButton(String assetPath, bool isActive, VoidCallback onPressed) {
+    return IconButton(
+      icon: SvgPicture.asset(
+        assetPath,
+        colorFilter: ColorFilter.mode(
+          isActive ? Colors.green : Colors.white,
+          BlendMode.srcIn,
+        ),
+        width: 40,  // Reduced from 50
+        height: 40,  // Reduced from 50
+      ),
+      iconSize: 40,  // Reduced from 50
+      onPressed: onPressed,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dominantColor = _palette?.dominantColor?.color ?? Colors.purple;
@@ -193,149 +242,7 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.queue_music, color: textColor),
-                              onPressed: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  backgroundColor: Colors.transparent,
-                                  isScrollControlled: true,
-                                  builder: (context) => DraggableScrollableSheet(
-                                    initialChildSize: 0.6,
-                                    minChildSize: 0.4,
-                                    maxChildSize: 0.8,
-                                    builder: (context, scrollController) =>
-                                        Container(
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF1A202B),
-                                        borderRadius: const BorderRadius.vertical(
-                                          top: Radius.circular(20),
-                                        ),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Container(
-                                            margin: const EdgeInsets.only(top: 8),
-                                            width: 40,
-                                            height: 4,
-                                            decoration: BoxDecoration(
-                                              color: Colors.grey[600],
-                                              borderRadius:
-                                                  BorderRadius.circular(2),
-                                            ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(16.0),
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                Text(
-                                                  'Queue',
-                                                  style: TextStyle(
-                                                    color: textColor,
-                                                    fontSize: 20,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                                IconButton(
-                                                  icon: Icon(Icons.clear_all,
-                                                      color: textColor),
-                                                  onPressed: widget
-                                                      .musicService.clearQueue,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: StreamBuilder<
-                                                List<Map<String, dynamic>>>(
-                                              stream:
-                                                  widget.musicService.queueStream,
-                                              builder: (context, snapshot) {
-                                                if (snapshot.hasError) {
-                                                  print('Queue stream error: ${snapshot.error}');
-                                                  return Center(child: Text('Error loading queue'));
-                                                }
-
-                                                if (!snapshot.hasData) {
-                                                  print('No queue data available');
-                                                  return const Center(child: CircularProgressIndicator());
-                                                }
-
-                                                final queue = snapshot.data!;
-                                                print('Queue length in UI: ${queue.length}');
-
-                                                if (queue.isEmpty) {
-                                                  return Center(child: Text('Queue is empty', style: TextStyle(color: Colors.grey)));
-                                                }
-
-                                                return ReorderableListView.builder(
-                                                  itemCount: queue.length,
-                                                  onReorder: (oldIndex, newIndex) {
-                                                    widget.musicService
-                                                        .reorderQueue(
-                                                      oldIndex,
-                                                      newIndex > oldIndex
-                                                          ? newIndex - 1
-                                                          : newIndex,
-                                                    );
-                                                  },
-                                                  itemBuilder: (context, index) {
-                                                    final song = queue[index];
-                                                    return ListTile(
-                                                      key: ValueKey(song['id']),
-                                                      leading: ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                                4),
-                                                        child: Image.network(
-                                                          song['image_url'],
-                                                          width: 40,
-                                                          height: 40,
-                                                          fit: BoxFit.cover,
-                                                        ),
-                                                      ),
-                                                      title: Text(
-                                                        song['title'],
-                                                        style: const TextStyle(
-                                                            color: Colors.white),
-                                                      ),
-                                                      subtitle: Text(
-                                                        song['artist'],
-                                                        style: TextStyle(
-                                                            color:
-                                                                Colors.grey[400]),
-                                                      ),
-                                                      trailing:
-                                                          ReorderableDragStartListener(
-                                                        index: index,
-                                                        child: const Icon(
-                                                          Icons.drag_handle,
-                                                          color: Colors.grey,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
-                                                );
-                                              },
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.more_vert, color: textColor),
-                              onPressed: () {},
-                            ),
-                          ],
-                        ),
+                        const SizedBox(width: 48), // Balance the layout
                       ],
                     ),
                   ),
@@ -347,24 +254,169 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          _currentSongState?['title'] ?? '',
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _currentSongState?['title'] ?? '',
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _currentSongState?['artist'] ?? '',
+                                style: TextStyle(
+                                  color: textColor.withOpacity(0.7),
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _currentSongState?['artist'] ?? '',
-                          style: TextStyle(
-                            color: textColor.withOpacity(0.7),
-                            fontSize: 18,
-                          ),
+                        IconButton(
+                          icon: Icon(Icons.queue_music, color: textColor),
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              backgroundColor: Colors.transparent,
+                              isScrollControlled: true,
+                              builder: (context) => DraggableScrollableSheet(
+                                initialChildSize: 0.6,
+                                minChildSize: 0.4,
+                                maxChildSize: 0.8,
+                                builder: (context, scrollController) =>
+                                    Container(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1A202B),
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(20),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        margin: const EdgeInsets.only(top: 8),
+                                        width: 40,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[600],
+                                          borderRadius:
+                                              BorderRadius.circular(2),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.all(16.0),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              'Queue',
+                                              style: TextStyle(
+                                                color: textColor,
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: Icon(Icons.clear_all,
+                                                  color: textColor),
+                                              onPressed: widget
+                                                  .musicService.clearQueue,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: StreamBuilder<
+                                            List<Map<String, dynamic>>>(
+                                          stream:
+                                              widget.musicService.queueStream,
+                                          builder: (context, snapshot) {
+                                            if (snapshot.hasError) {
+                                              print('Queue stream error: ${snapshot.error}');
+                                              return Center(child: Text('Error loading queue'));
+                                            }
+
+                                            if (!snapshot.hasData) {
+                                              print('No queue data available');
+                                              return const Center(child: CircularProgressIndicator());
+                                            }
+
+                                            final queue = snapshot.data!;
+                                            print('Queue length in UI: ${queue.length}');
+
+                                            if (queue.isEmpty) {
+                                              return Center(child: Text('Queue is empty', style: TextStyle(color: Colors.grey)));
+                                            }
+
+                                            return ReorderableListView.builder(
+                                              itemCount: queue.length,
+                                              onReorder: (oldIndex, newIndex) {
+                                                widget.musicService
+                                                    .reorderQueue(
+                                                  oldIndex,
+                                                  newIndex > oldIndex
+                                                      ? newIndex - 1
+                                                      : newIndex,
+                                                );
+                                              },
+                                              itemBuilder: (context, index) {
+                                                final song = queue[index];
+                                                return ListTile(
+                                                  key: ValueKey(song['id']),
+                                                  leading: ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            4),
+                                                    child: Image.network(
+                                                      song['image_url'],
+                                                      width: 40,
+                                                      height: 40,
+                                                      fit: BoxFit.cover,
+                                                    ),
+                                                  ),
+                                                  title: Text(
+                                                    song['title'],
+                                                    style: const TextStyle(
+                                                        color: Colors.white),
+                                                  ),
+                                                  subtitle: Text(
+                                                    song['artist'],
+                                                    style: TextStyle(
+                                                        color:
+                                                            Colors.grey[400]),
+                                                  ),
+                                                  trailing:
+                                                      ReorderableDragStartListener(
+                                                    index: index,
+                                                    child: const Icon(
+                                                      Icons.drag_handle,
+                                                      color: Colors.grey,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.more_vert, color: textColor),
+                          onPressed: () {},
                         ),
                       ],
                     ),
@@ -379,23 +431,7 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                           stream: widget.musicService.durationStream,
                           builder: (context, snapshot) {
                             final duration = snapshot.data ?? Duration.zero;
-                            return ProgressBar(
-                              progress: position,
-                              total: duration,
-                              buffered: duration,
-                              onSeek: (duration) {
-                                widget.musicService.seek(duration);
-                              },
-                              baseBarColor: const Color.fromARGB(255, 23, 80, 42)
-                                  .withOpacity(0.2),
-                              progressBarColor:
-                                  const Color.fromARGB(255, 21, 112, 44),
-                              bufferedBarColor:
-                                  const Color.fromARGB(255, 107, 119, 139)
-                                      .withOpacity(0.3),
-                              thumbColor: textColor,
-                              timeLabelTextStyle: TextStyle(color: textColor),
-                            );
+                            return _buildProgressBar(position, duration, textColor);
                           },
                         );
                       },
@@ -403,25 +439,32 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                   ),
                   Padding(
                     padding: const EdgeInsets.only(
-                        left: 32.0, right: 32.0, bottom: 32.0),
+                      left: 16.0,
+                      right: 16.0,
+                      bottom: 32.0
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.shuffle,
-                            color: _getActiveColor(_isShuffleEnabled, textColor),
-                          ),
-                          onPressed: () {
+                        _buildControlButton(
+                          'assets/icons/shuffle.svg',
+                          _isShuffleEnabled,
+                          () async {
+                            final newShuffleState = !_isShuffleEnabled;
                             setState(() {
-                              _isShuffleEnabled = !_isShuffleEnabled;
+                              _isShuffleEnabled = newShuffleState;
                             });
-                            widget.musicService.toggleShuffle();
+                            await widget.musicService.setShuffleMode(newShuffleState);
+                            if (newShuffleState) {
+                              await widget.musicService.shuffleQueue();
+                            } else {
+                              await widget.musicService.restoreOriginalQueue();
+                            }
                           },
                         ),
                         IconButton(
                           icon: Icon(Icons.skip_previous, color: textColor),
-                          iconSize: 40,
+                          iconSize: 40,  // Reduced from 50
                           onPressed: widget.musicService.playPrevious,
                         ),
                         StreamBuilder<PlayerState>(
@@ -435,8 +478,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                 processingState == ProcessingState.buffering) {
                               return Container(
                                 margin: const EdgeInsets.all(8.0),
-                                width: 72.0,
-                                height: 72.0,
+                                width: 50.0,
+                                height: 50.0,
                                 child: const CircularProgressIndicator(
                                   valueColor:
                                       AlwaysStoppedAnimation<Color>(Colors.white),
@@ -451,7 +494,7 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                     : Icons.play_circle_fill,
                                 color: Colors.white,
                               ),
-                              iconSize: 72,
+                              iconSize: 56,  // Reduced from 60
                               onPressed: playing == true
                                   ? widget.musicService.pause
                                   : widget.musicService.resume,
@@ -460,16 +503,13 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                         ),
                         IconButton(
                           icon: Icon(Icons.skip_next, color: textColor),
-                          iconSize: 40,
+                          iconSize: 40,  // Reduced from 50
                           onPressed: widget.musicService.playNext,
                         ),
-                        IconButton(
-                          icon: Icon(
-                            _getRepeatIcon(),
-                            color: _getActiveColor(
-                                _loopMode != LoopMode.off, textColor),
-                          ),
-                          onPressed: () {
+                        _buildControlButton(
+                          'assets/icons/repeat.svg',
+                          _loopMode != LoopMode.off,
+                          () {
                             widget.musicService.cycleLoopMode().then((_) {
                               setState(() {
                                 switch (_loopMode) {

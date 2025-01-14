@@ -214,9 +214,22 @@ class MusicService {
 
   Future<void> playSong(String url,
       {Map<String, dynamic>? currentSong,
-      Map<String, dynamic>? nextSong,
       List<Map<String, dynamic>>? subsequentSongs}) async {
     try {
+      // Store original queue
+      if (currentSong != null) {
+        _originalQueue = [
+          currentSong,
+          ...(subsequentSongs ?? [])
+        ];
+        _currentQueue = List.from(_originalQueue);
+        
+        // Apply shuffle if enabled
+        if (_isShuffled) {
+          await shuffleQueue();
+        }
+      }
+
       // Track the played song
       if (currentSong != null) {
         await _playHistoryService.addToHistory(currentSong);
@@ -451,7 +464,7 @@ class MusicService {
       final response = await _supabase
           .from('artist_page')
           .select()
-          .eq('artist_name', artistName)
+          .eq('artist_name', artistName)  // Remove the $ symbol here
           .single();
       
       print('Artist page data: $response'); // Debug log
@@ -1433,6 +1446,109 @@ class MusicService {
       await _playHistoryService.clearHistory();
     } catch (e) {
       print('Error clearing play history: $e');
+    }
+  }
+
+  // Add these methods to your MusicService class
+  List<Map<String, dynamic>> _originalQueue = [];
+  List<Map<String, dynamic>> _currentQueue = [];
+  bool _isShuffled = false;
+
+  Future<bool> getShuffleMode() async {
+    return _isShuffled;
+  }
+
+  Future<void> setShuffleMode(bool enabled) async {
+    _isShuffled = enabled;
+  }
+
+  Future<void> shuffleQueue() async {
+    if (_currentQueue.isEmpty) return;
+    
+    // Save current song
+    final currentSong = _currentQueue.first;
+    
+    // Shuffle remaining songs
+    final remainingSongs = _currentQueue.skip(1).toList()..shuffle();
+    
+    // Update queue with current song at start and shuffled remaining songs
+    _currentQueue = [currentSong, ...remainingSongs];
+    
+    // Create new shuffled playlist while preserving current playback
+    final wasPlaying = _audioPlayer.playing;
+    final position = await _audioPlayer.position;
+    
+    final newPlaylist = ConcatenatingAudioSource(children: []);
+    await newPlaylist.add(AudioSource.uri(
+      Uri.parse(currentSong['audio_url']),
+      tag: currentSong,
+    ));
+    
+    // Add shuffled songs to playlist
+    for (var song in remainingSongs) {
+      await newPlaylist.add(AudioSource.uri(
+        Uri.parse(song['audio_url']),
+        tag: song,
+      ));
+    }
+    
+    // Set the new shuffled playlist
+    _playlist = newPlaylist;
+    await _audioPlayer.setAudioSource(
+      _playlist,
+      initialPosition: position,
+    );
+    
+    // Restore playback state
+    if (wasPlaying) {
+      await _audioPlayer.play();
+    }
+    
+    // Update UI
+    _updateQueueStream();
+  }
+
+  Future<void> restoreOriginalQueue() async {
+    if (_originalQueue.isEmpty) return;
+    
+    // Find current song index in original queue
+    final currentSong = _currentQueue.first;
+    final currentIndex = _originalQueue.indexWhere((song) => song['id'] == currentSong['id']);
+    
+    if (currentIndex >= 0) {
+      // Reorder queue to start from current song while maintaining original order
+      _currentQueue = [
+        ..._originalQueue.skip(currentIndex),
+        ..._originalQueue.take(currentIndex)
+      ];
+      
+      // Preserve playback state
+      final wasPlaying = _audioPlayer.playing;
+      final position = await _audioPlayer.position;
+      
+      // Create new playlist in original order
+      final newPlaylist = ConcatenatingAudioSource(children: []);
+      for (var song in _currentQueue) {
+        await newPlaylist.add(AudioSource.uri(
+          Uri.parse(song['audio_url']),
+          tag: song,
+        ));
+      }
+      
+      // Set the restored playlist
+      _playlist = newPlaylist;
+      await _audioPlayer.setAudioSource(
+        _playlist,
+        initialPosition: position,
+      );
+      
+      // Restore playback state
+      if (wasPlaying) {
+        await _audioPlayer.play();
+      }
+      
+      // Update UI
+      _updateQueueStream();
     }
   }
 }

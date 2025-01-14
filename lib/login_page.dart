@@ -787,7 +787,7 @@ class _HomePageState extends State<HomePage> {
               await _musicService.playSong(
                 audioUrl,
                 currentSong: song,
-                nextSong: nextSong,
+                subsequentSongs: nextSong != null ? [nextSong] : null, // Change from nextSong to subsequentSongs
               );
             } catch (e) {
               ScaffoldMessenger.of(context).showSnackBar(

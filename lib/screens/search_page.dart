@@ -347,6 +347,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
               fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
           subtitle: Text(
             song['artist'] ?? '',
@@ -354,6 +356,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
               color: Colors.grey[400],
               fontSize: 14,
             ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
           trailing: IconButton(
             icon: const Icon(Icons.more_vert, color: Colors.grey),
@@ -364,7 +368,7 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
           onTap: () async {
             try {
               final audioUrl = song['audio_url'];
-              if (audioUrl == null || audioUrl.toString().isEmpty) {
+              if (audioUrl == null || audioUrl.isEmpty) {
                 throw Exception('Song URL is missing');
               }
 
@@ -381,14 +385,14 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
               widget.onSongPlay(standardizedSong);
 
               final nextSongIndex = index + 1;
-              final nextSong = nextSongIndex < _searchResults.length
-                  ? _searchResults[nextSongIndex]
+              final subsequentSongs = nextSongIndex < _searchResults.length
+                  ? [_searchResults[nextSongIndex]]
                   : null;
 
               await widget.musicService.playSong(
                 audioUrl,
                 currentSong: standardizedSong,
-                nextSong: nextSong,
+                subsequentSongs: subsequentSongs,  // Use subsequentSongs instead of nextSong
               );
             } catch (e) {
               if (mounted) {

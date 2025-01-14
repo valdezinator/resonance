@@ -571,16 +571,16 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                   ),
                   label: 'Library',
                 ),
-                BottomNavigationBarItem(
-                  icon: SvgPicture.asset(
-                    'assets/icons/profile_icon.svg',
-                    colorFilter: ColorFilter.mode(
-                      widget.selectedIndex == 3 ? Colors.white : Colors.grey,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  label: 'Profile',
-                ),
+                // BottomNavigationBarItem(
+                //   icon: SvgPicture.asset(
+                //     'assets/icons/profile_icon.svg',
+                //     colorFilter: ColorFilter.mode(
+                //       widget.selectedIndex == 3 ? Colors.white : Colors.grey,
+                //       BlendMode.srcIn,
+                //     ),
+                //   ),
+                //   label: 'Profile',
+                // ),
               ],
             ),
           ),
@@ -733,8 +733,8 @@ class _SongListView extends StatelessWidget {
         if (snapshot.hasData && snapshot.data != null) {
           // Use cached image
           return Container(
-            width: 40,
-            height: 40,
+            width: 50,  // Increased from 40
+            height: 50,  // Increased from 40
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(4),
               image: DecorationImage(
@@ -746,8 +746,8 @@ class _SongListView extends StatelessWidget {
         } else {
           // Use network image or album image
           return Container(
-            width: 40,
-            height: 40,
+            width: 50,  // Increased from 40
+            height: 50,  // Increased from 40
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(4),
               image: DecorationImage(
@@ -993,8 +993,8 @@ class _PlaylistSelectorSheetState extends State<PlaylistSelectorSheet> {
           ),
           ListTile(
             leading: Container(
-              width: 40,
-              height: 40,
+              width: 50,  // Increased from 40
+              height: 50,  // Increased from 40
               decoration: BoxDecoration(
                 color: Colors.green,
                 borderRadius: BorderRadius.circular(8),
@@ -1047,8 +1047,8 @@ class _PlaylistSelectorSheetState extends State<PlaylistSelectorSheet> {
                   final playlist = snapshot.data![index];
                   return ListTile(
                     leading: Container(
-                      width: 40,
-                      height: 40,
+                      width: 50,  // Increased from 40
+                      height: 50,  // Increased from 40
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
                         image: playlist['image_url'] != null
