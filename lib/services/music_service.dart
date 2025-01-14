@@ -665,11 +665,19 @@ class MusicService {
   }
 
   Future<void> createPlaylist(String name, String description) async {
-    await _supabase.from('playlists').insert({
-      'name': name,
-      'description': description,
-      'user_id': _supabase.auth.currentUser?.id,
-    });
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      throw Exception('User not authenticated');
+    }
+
+    await _supabase.from('playlist')  // Changed from 'playlists'
+        .insert({
+          'playlist_name': name,
+          'description': description,
+          'user_id': userId,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        });
   }
 
   Future<void> addToPlaylist(String playlistId, String songId) async {
@@ -1282,16 +1290,17 @@ class MusicService {
 
   Future<List<Map<String, dynamic>>> getUserPlaylists() async {
     try {
-      final supabase = Supabase.instance.client;
-      final userId = supabase.auth.currentUser?.id;
-      
+      final userId = _supabase.auth.currentUser?.id;
       if (userId == null) {
         throw Exception('User not logged in');
       }
 
-      final response = await supabase
-          .from('playlist')
-          .select()
+      final response = await _supabase
+          .from('playlist')  // Changed from 'playlists'
+          .select('''
+            *,
+            playlist_songs(count)
+          ''')
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
@@ -1304,15 +1313,58 @@ class MusicService {
 
   Future<void> addSongToPlaylist(String playlistId, Map<String, dynamic> song) async {
     try {
+      // First verify the playlist belongs to the current user
       final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+
+      // Check playlist ownership
+      final playlist = await supabase
+          .from('playlist')  // Changed from 'playlists'
+          .select('id, user_id')
+          .eq('id', playlistId)
+          .eq('user_id', userId)
+          .single();
+      
+      if (playlist == null) {
+        throw Exception('Playlist not found or access denied');
+      }
+
+      // Check if song already exists in playlist
+      final existingSong = await supabase
+          .from('playlist_songs')
+          .select()
+          .eq('playlist_id', playlistId)
+          .eq('song_id', song['id'])
+          .maybeSingle();
+
+      if (existingSong != null) {
+        throw Exception('Song already exists in playlist');
+      }
+
+      // Add song to playlist
       await supabase.from('playlist_songs').insert({
         'playlist_id': playlistId,
         'song_id': song['id'],
+        'title': song['title'],
+        'artist': song['artist'],
+        'image_url': song['image_url'],
+        'audio_url': song['audio_url'],
+        'added_by': userId,
         'added_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
       print('Error adding song to playlist: $e');
-      throw Exception('Failed to add song to playlist');
+      if (e is PostgrestException) {
+        print('Postgrest error details:');
+        print('Message: ${e.message}');
+        print('Code: ${e.code}');
+        print('Details: ${e.details}');
+      }
+      throw Exception('Failed to add song to playlist: $e');
     }
   }
 

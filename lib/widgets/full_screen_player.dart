@@ -5,6 +5,9 @@ import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import '../services/music_service.dart';
 import 'dart:io';
 import 'package:flutter_svg/flutter_svg.dart';  // Add this import
+import '../screens/album_details_page.dart';
+import '../screens/library_page.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class FullScreenPlayer extends StatefulWidget {
   final MusicService musicService;
@@ -416,7 +419,129 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                         ),
                         IconButton(
                           icon: Icon(Icons.more_vert, color: textColor),
-                          onPressed: () {},
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1C1C1E),
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ListTile(
+                                      leading: Icon(Icons.playlist_add, color: Colors.white),
+                                      title: Text(
+                                        'Add to Playlist',
+                                        style: GoogleFonts.lato(color: Colors.white),
+                                      ),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _showPlaylistSelector(context, _currentSongState!);
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: FutureBuilder<bool>(
+                                        future: widget.musicService.isSongDownloaded(_currentSongState?['id'] ?? ''),
+                                        builder: (context, snapshot) {
+                                          final isDownloaded = snapshot.data ?? false;
+                                          return StreamBuilder<Map<String, double>>(
+                                            stream: widget.musicService.downloadProgressStream,
+                                            builder: (context, progressSnapshot) {
+                                              final progress = progressSnapshot.data?[_currentSongState?['id']] ?? 0.0;
+                                              final isDownloading = widget.musicService.isDownloading(_currentSongState?['id'] ?? '');
+
+                                              if (isDownloaded) {
+                                                return Icon(Icons.download_done, color: Colors.green);
+                                              }
+
+                                              if (isDownloading) {
+                                                return Stack(
+                                                  alignment: Alignment.center,
+                                                  children: [
+                                                    CircularProgressIndicator(
+                                                      value: progress,
+                                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                      strokeWidth: 2,
+                                                    ),
+                                                    Text(
+                                                      '${(progress * 100).toInt()}%',
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 8,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                );
+                                              }
+
+                                              return Icon(Icons.download, color: Colors.white);
+                                            },
+                                          );
+                                        },
+                                      ),
+                                      title: Text(
+                                        'Download',
+                                        style: GoogleFonts.lato(color: Colors.white),
+                                      ),
+                                      onTap: () async {
+                                        if (_currentSongState == null) return;
+                                        
+                                        try {
+                                          final isDownloaded = await widget.musicService
+                                              .isSongDownloaded(_currentSongState!['id']);
+
+                                          if (!isDownloaded) {
+                                            // Ensure all required fields are present
+                                            final songToDownload = {
+                                              ..._currentSongState!,
+                                              'audio_url': _currentSongState!['audio_url'],
+                                              'album_id': _currentSongState!['album_id'],
+                                              'album_title': _currentSongState!['album_title'] ?? '',
+                                              'image_url': _currentSongState!['image_url'],
+                                              'album_image_url': _currentSongState!['album_image_url'] ?? _currentSongState!['image_url'],
+                                            };
+
+                                            // Close the modal bottom sheet
+                                            Navigator.pop(context);
+
+                                            // Start download
+                                            await widget.musicService.downloadSong(songToDownload);
+                                            
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Download started'),
+                                                duration: Duration(seconds: 2),
+                                              ),
+                                            );
+                                          } else {
+                                            Navigator.pop(context);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Song already downloaded'),
+                                                duration: Duration(seconds: 2),
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          Navigator.pop(context);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Download failed: ${e.toString()}'),
+                                              backgroundColor: Colors.red,
+                                              duration: Duration(seconds: 3),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -535,6 +660,25 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPlaylistSelector(BuildContext context, Map<String, dynamic> song) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => PlaylistSelectorSheet(
+        song: {
+          ...song,
+          'title': song['title'] ?? 'Unknown Title',
+          'artist': song['artist'] ?? 'Unknown Artist',
+          'image_url': song['image_url'] ?? '',
+          'audio_url': song['audio_url'] ?? '',
+          'id': song['id'],
+        },
+        musicService: widget.musicService,
       ),
     );
   }
