@@ -244,7 +244,9 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                         color: Colors.white,
                         size: 32,
                       ),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
                     ),
                     actions: [
                       IconButton(
@@ -289,24 +291,27 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                       ),
                       child: Row(
                         children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.3),
-                                  blurRadius: 10,
-                                  offset: Offset(0, 5),
+                          Hero(
+                            tag: 'album_image_${widget.album['id']}',
+                            child: Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 10,
+                                    offset: Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  widget.album['image_url'],
+                                  fit: BoxFit.cover,
                                 ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                widget.album['image_url'],
-                                fit: BoxFit.cover,
                               ),
                             ),
                           ),
@@ -315,15 +320,21 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  widget.album['title'],
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
+                                Hero(
+                                  tag: 'album_title_${widget.album['id']}',
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: Text(
+                                      widget.album['title'],
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 SizedBox(height: 8),
                                 Text(

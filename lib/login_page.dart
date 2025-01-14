@@ -25,6 +25,7 @@ import 'dart:io';
 import 'screens/profile_image_page.dart';
 import 'providers/theme_provider.dart';
 import 'package:provider/provider.dart';  // Add this line
+import 'animations/page_transitions.dart';  // Add this line
 
 class MyApp extends StatelessWidget {
   final User? user;
@@ -601,8 +602,8 @@ class _HomePageState extends State<HomePage> {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => AlbumDetailsPage(
+          SlideUpPageRoute(
+            child: AlbumDetailsPage(
               album: album,
               musicService: _musicService,
               onSongPlay: (song) {
@@ -627,42 +628,47 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Album Cover
+            // Album Cover with Hero animation
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: CachedNetworkImage(
-                imageUrl: album['image_url'] as String,
-                width: 160,
-                height: 160,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
+              child: Hero(
+                tag: 'album_image_${album['id']}',
+                child: CachedNetworkImage(
+                  imageUrl: album['image_url'] as String,
                   width: 160,
                   height: 160,
-                  color: Colors.grey[900],
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                errorWidget: (context, url, error) => Container(
-                  width: 160,
-                  height: 160,
-                  color: Colors.grey[900],
-                  child: Icon(Icons.album, color: Colors.white, size: 50),
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    width: 160,
+                    height: 160,
+                    color: Colors.grey[900],
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: 160,
+                    height: 160,
+                    color: Colors.grey[900],
+                    child: Icon(Icons.album, color: Colors.white, size: 50),
+                  ),
                 ),
               ),
             ),
             SizedBox(height: 8),
-            // Title
-            Text(
-              album['title'] as String,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
+            // Title with Material
+            Material(
+              color: Colors.transparent,
+              child: Text(
+                album['title'] as String,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
             SizedBox(height: 4),
-            // Artist
             Text(
               album['artist'] as String,
               style: TextStyle(
@@ -907,43 +913,46 @@ class _HomePageState extends State<HomePage> {
             }
 
             final charts = snapshot.data ?? [];
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              itemCount: math.min(5, charts.length),
-              itemBuilder: (context, index) {
-                final song = charts[index]['songs'];
-                return Container(
-                  margin: EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ListTile(
-                    leading: Text(
-                      '#${index + 1}',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+            return Container(
+              constraints: BoxConstraints(maxHeight: 300), // Add height constraint
+              child: ListView.builder(
+                shrinkWrap: true,
+                physics: NeverScrollableScrollPhysics(),
+                itemCount: math.min(5, charts.length),
+                itemBuilder: (context, index) {
+                  final song = charts[index]['songs'];
+                  return Container(
+                    margin: EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ListTile(
+                      leading: Text(
+                        '#${index + 1}',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
+                      title: Text(
+                        song['title'],
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        song['artist'],
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      trailing: Icon(Icons.play_circle_filled,
+                          color: Colors.white, size: 32),
+                      onTap: () {
+                        // Handle song play
+                      },
                     ),
-                    title: Text(
-                      song['title'],
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    subtitle: Text(
-                      song['artist'],
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                    trailing: Icon(Icons.play_circle_filled,
-                        color: Colors.white, size: 32),
-                    onTap: () {
-                      // Handle song play
-                    },
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             );
           },
         ),
