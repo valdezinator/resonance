@@ -2,30 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'services/music_service.dart';
-import 'widgets/bottom_player.dart';
-import 'config/supabase_config.dart';
+import '../services/music_service.dart';
+import '../widgets/bottom_player.dart';
+import '../config/supabase_config.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'screens/search_page.dart';
-import 'screens/settings_page.dart';
-import 'screens/album_details_page.dart';
+import 'search_page.dart';
+import 'settings_page.dart';
+import 'album_details_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:math' as math;
-import 'screens/artist_details_page.dart';
-import 'widgets/full_screen_player.dart';
+import 'artist_details_page.dart';
+import '../widgets/full_screen_player.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'services/audio_handler.dart';
+import '../services/audio_handler.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'screens/library_page.dart';
+import 'library_page.dart';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
-import 'screens/profile_image_page.dart';
-import 'providers/theme_provider.dart';
+import 'profile_image_page.dart';
+import '../providers/theme_provider.dart';
 import 'package:provider/provider.dart';  // Add this line
-import 'animations/page_transitions.dart';  // Add this line
+import '../animations/page_transitions.dart';  // Add this line
 
 class MyApp extends StatelessWidget {
   final User? user;
