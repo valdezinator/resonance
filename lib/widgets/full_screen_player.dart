@@ -4,64 +4,105 @@ import 'package:palette_generator/palette_generator.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import '../services/music_service.dart';
 import 'dart:io';
-import 'package:flutter_svg/flutter_svg.dart';  // Add this import
+import 'package:flutter_svg/flutter_svg.dart'; // Add this import
 import '../screens/album_details_page.dart';
 import '../screens/library_page.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/music_providers.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class FullScreenPlayer extends StatefulWidget {
-  final MusicService musicService;
-  final Map<String, dynamic> currentSong;
+class LyricLine {
+  final Duration timestamp;
+  final String text;
+  final List<LyricWord> words;
+
+  LyricLine({
+    required this.timestamp,
+    required this.text,
+    required this.words,
+  });
+}
+
+class LyricWord {
+  final Duration timestamp;
+  final String text;
+  final int index;
+
+  LyricWord({
+    required this.timestamp,
+    required this.text,
+    required this.index,
+  });
+}
+
+class FullScreenPlayer extends ConsumerStatefulWidget {
   final VoidCallback onClose;
-  final Function(Map<String, dynamic>) onSongChange;
 
   const FullScreenPlayer({
     Key? key,
-    required this.musicService,
-    required this.currentSong,
     required this.onClose,
-    required this.onSongChange,
   }) : super(key: key);
 
   @override
-  State<FullScreenPlayer> createState() => _FullScreenPlayerState();
+  ConsumerState<FullScreenPlayer> createState() => _FullScreenPlayerState();
 }
 
-class _FullScreenPlayerState extends State<FullScreenPlayer> {
+class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
   PaletteGenerator? _palette;
   bool _isSeeking = false;
   bool _isShuffleEnabled = false;
   LoopMode _loopMode = LoopMode.off;
-  Map<String, dynamic>? _currentSongState;
+  List<LyricLine> _parsedLyrics = [];
+  String? _currentWord;
+  int _currentLineIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _currentSongState = widget.currentSong;
     _loadImagePalette();
     _initializePlayerState();
+    _loadLyrics();
 
-    widget.musicService.currentSongStream.listen((newSong) {
-      if (mounted && newSong != null) {
-        setState(() {
-          _currentSongState = newSong;
-        });
-        widget.onSongChange(newSong);
+    // Listen to song changes
+    ref.read(musicServiceProvider).currentSongStream.listen((song) {
+      if (mounted && song != null) {
+        ref.read(currentSongProvider.notifier).updateCurrentSong(song);
         _loadImagePalette();
+        _loadLyrics();
       }
     });
   }
 
+  @override
+  void didUpdateWidget(FullScreenPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _loadImagePalette();
+  }
+
   Future<void> _initializePlayerState() async {
     // Get initial shuffle state from music service
-    final shuffleMode = await widget.musicService.getShuffleMode();
+    final shuffleMode = await ref.read(musicServiceProvider).getShuffleMode();
     setState(() {
       _isShuffleEnabled = shuffleMode;
     });
   }
 
   Future<void> _loadImagePalette() async {
-    // Remove the implementation as it's now handled in _buildAlbumArt
+    final currentSong = ref.read(currentSongProvider);
+    if (currentSong == null || currentSong['image_url'] == null) return;
+
+    try {
+      final imageProvider = NetworkImage(currentSong['image_url']);
+      final palette = await PaletteGenerator.fromImageProvider(imageProvider);
+      if (mounted) {
+        setState(() {
+          _palette = palette;
+        });
+      }
+    } catch (e) {
+      print('Error loading palette: $e');
+    }
   }
 
   Future<void> _loadPaletteFromProvider(ImageProvider imageProvider) async {
@@ -77,43 +118,151 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
     }
   }
 
+  Future<void> _loadLyrics() async {
+    final currentSong = ref.read(currentSongProvider);
+    if (currentSong == null) return;
+
+    try {
+      final response = await Supabase.instance.client
+          .from('songs')
+          .select('song_lyrics')
+          .eq('id', currentSong['id'])
+          .single();
+
+      if (response == null || response['song_lyrics'] == null) {
+        setState(() {
+          _parsedLyrics = [];
+        });
+        return;
+      }
+
+      final lyrics = response['song_lyrics'] as String;
+      final List<LyricLine> parsedLines = [];
+
+      for (String line in lyrics.split('\n')) {
+        if (line.trim().isEmpty) continue;
+
+        // Parse timestamp and text
+        final match =
+            RegExp(r'\[(\d{2}):(\d{2})\.(\d{2})\](.*)').firstMatch(line);
+        if (match != null) {
+          final minutes = int.parse(match.group(1)!);
+          final seconds = int.parse(match.group(2)!);
+          final milliseconds = int.parse(match.group(3)!) * 10;
+          final text = match.group(4)!.trim();
+
+          final timestamp = Duration(
+            minutes: minutes,
+            seconds: seconds,
+            milliseconds: milliseconds,
+          );
+
+          // Parse word timestamps if they exist
+          List<LyricWord> words = [];
+          int wordIndex = 0;
+
+          // Split text into words and create word objects
+          for (String word in text.split(' ')) {
+            final wordMatch =
+                RegExp(r'\{(\d{2}):(\d{2})\.(\d{2})\}(.*)').firstMatch(word);
+            if (wordMatch != null) {
+              final wordMinutes = int.parse(wordMatch.group(1)!);
+              final wordSeconds = int.parse(wordMatch.group(2)!);
+              final wordMilliseconds = int.parse(wordMatch.group(3)!) * 10;
+              final wordText = wordMatch.group(4)!;
+
+              words.add(LyricWord(
+                timestamp: Duration(
+                  minutes: wordMinutes,
+                  seconds: wordSeconds,
+                  milliseconds: wordMilliseconds,
+                ),
+                text: wordText,
+                index: wordIndex++,
+              ));
+            } else {
+              words.add(LyricWord(
+                timestamp: timestamp,
+                text: word,
+                index: wordIndex++,
+              ));
+            }
+          }
+
+          parsedLines.add(LyricLine(
+            timestamp: timestamp,
+            text: text,
+            words: words,
+          ));
+        }
+      }
+
+      setState(() {
+        _parsedLyrics = parsedLines;
+      });
+    } catch (e) {
+      print('Error loading lyrics: $e');
+      setState(() {
+        _parsedLyrics = [];
+      });
+    }
+  }
+
   Widget _buildAlbumArt() {
+    final currentSong = ref.watch(currentSongProvider);
+    if (currentSong == null) return const SizedBox.shrink();
+
     return FutureBuilder<String?>(
-      future: widget.musicService.getCachedImagePath(_currentSongState?['id'] ?? ''),
+      future:
+          ref.read(musicServiceProvider).getCachedImagePath(currentSong['id']),
       builder: (context, snapshot) {
         if (snapshot.hasData && snapshot.data != null) {
           final imageProvider = FileImage(File(snapshot.data!));
           _loadPaletteFromProvider(imageProvider);
-          
+
           return Hero(
-            tag: 'album_art_${_currentSongState?['id']}',
+            tag: 'album_art_${currentSong['id']}',
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image(
                 image: imageProvider,
+                width: double.infinity,
+                height: double.infinity,
                 fit: BoxFit.cover,
               ),
             ),
           );
         }
-        final networkImageProvider = NetworkImage(_currentSongState?['image_url'] ?? '');
-        _loadPaletteFromProvider(networkImageProvider);
-        
-        return Hero(
-          tag: 'album_art_${_currentSongState?['id']}',
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image(
-              image: networkImageProvider,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: Colors.grey[800],
-                  child: Icon(Icons.music_note, color: Colors.white, size: 64),
-                );
-              },
+
+        if (currentSong['image_url'] != null) {
+          final networkImageProvider = NetworkImage(currentSong['image_url']);
+          _loadPaletteFromProvider(networkImageProvider);
+
+          return Hero(
+            tag: 'album_art_${currentSong['id']}',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image(
+                image: networkImageProvider,
+                width: double.infinity,
+                height: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  print('Error loading image: $error');
+                  return Container(
+                    color: Colors.grey[800],
+                    child:
+                        Icon(Icons.music_note, color: Colors.white, size: 64),
+                  );
+                },
+              ),
             ),
-          ),
+          );
+        }
+
+        return Container(
+          color: Colors.grey[800],
+          child: Icon(Icons.music_note, color: Colors.white, size: 64),
         );
       },
     );
@@ -136,7 +285,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
     return isActive ? Colors.green : defaultColor;
   }
 
-  Widget _buildProgressBar(Duration position, Duration duration, Color textColor) {
+  Widget _buildProgressBar(
+      Duration position, Duration duration, Color textColor) {
     return Column(
       children: [
         ProgressBar(
@@ -144,11 +294,12 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
           total: duration,
           buffered: duration,
           onSeek: (duration) {
-            widget.musicService.seek(duration);
+            ref.read(musicServiceProvider).seek(duration);
           },
           baseBarColor: const Color.fromARGB(255, 23, 80, 42).withOpacity(0.2),
           progressBarColor: const Color.fromARGB(255, 21, 112, 44),
-          bufferedBarColor: const Color.fromARGB(255, 107, 119, 139).withOpacity(0.3),
+          bufferedBarColor:
+              const Color.fromARGB(255, 107, 119, 139).withOpacity(0.3),
           thumbRadius: 0,
           barHeight: 6, // Increased thickness
           timeLabelTextStyle: TextStyle(color: textColor),
@@ -159,7 +310,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
     );
   }
 
-  Widget _buildControlButton(String assetPath, bool isActive, VoidCallback onPressed) {
+  Widget _buildControlButton(
+      String assetPath, bool isActive, VoidCallback onPressed) {
     return IconButton(
       icon: SvgPicture.asset(
         assetPath,
@@ -167,16 +319,125 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
           isActive ? Colors.green : Colors.white,
           BlendMode.srcIn,
         ),
-        width: 40,  // Reduced from 50
-        height: 40,  // Reduced from 50
+        width: 28, // Reduced from 40
+        height: 28, // Reduced from 40
       ),
-      iconSize: 40,  // Reduced from 50
+      iconSize: 28, // Reduced from 40
       onPressed: onPressed,
+    );
+  }
+
+  Widget _buildLyricsDisplay() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 32.0),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      height: 120,
+      child: StreamBuilder<Duration>(
+        stream: ref.read(musicServiceProvider).positionStream,
+        builder: (context, snapshot) {
+          final position = snapshot.data ?? Duration.zero;
+
+          // Find current line based on position
+          int currentLineIndex = _parsedLyrics.isEmpty
+              ? -1
+              : _parsedLyrics.indexWhere((line) => line.timestamp > position);
+          if (currentLineIndex == -1) {
+            currentLineIndex =
+                _parsedLyrics.isEmpty ? -1 : _parsedLyrics.length - 1;
+          } else {
+            currentLineIndex = (currentLineIndex - 1)
+                .clamp(0, _parsedLyrics.isEmpty ? 0 : _parsedLyrics.length - 1);
+          }
+
+          // Find current word
+          String? currentWord;
+          if (currentLineIndex >= 0 &&
+              currentLineIndex < _parsedLyrics.length) {
+            final currentLine = _parsedLyrics[currentLineIndex];
+            final wordIndex = currentLine.words
+                .indexWhere((word) => word.timestamp > position);
+            if (wordIndex > 0) {
+              currentWord = currentLine.words[wordIndex - 1].text;
+            }
+          }
+
+          if (_parsedLyrics.isEmpty) {
+            return Center(
+              child: Text(
+                'No lyrics available',
+                style: GoogleFonts.lato(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 16,
+                ),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            itemCount: 3,
+            itemBuilder: (context, index) {
+              final lineIndex = (currentLineIndex - 1 + index)
+                  .clamp(0, _parsedLyrics.length - 1);
+              final line = _parsedLyrics[lineIndex];
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: RichText(
+                  textAlign: TextAlign.center,
+                  text: TextSpan(
+                    children: line.words.map((word) {
+                      final isCurrentWord = word.text == currentWord;
+                      final isCurrentLine = lineIndex == currentLineIndex;
+
+                      return TextSpan(
+                        text: '${word.text} ',
+                        style: GoogleFonts.lato(
+                          color: isCurrentWord
+                              ? Colors.green
+                              : isCurrentLine
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.5),
+                          fontSize: isCurrentLine ? 16 : 14,
+                          fontWeight: isCurrentWord
+                              ? FontWeight.bold
+                              : isCurrentLine
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    // Watch the current song to update UI when it changes
+    final currentSong = ref.watch<Map<String, dynamic>?>(currentSongProvider);
+    final playerState = ref.watch(playerStateProvider);
+    final position = ref.watch(positionStreamProvider);
+    final duration = ref.watch(durationStreamProvider);
+    final controls = ref.watch(playerControlsProvider);
+
+    // Listen to song changes to update palette
+    ref.listen<Map<String, dynamic>?>(currentSongProvider, (previous, next) {
+      if (next != null && next != previous) {
+        _loadImagePalette();
+      }
+    });
+
+    if (currentSong == null) return const SizedBox.shrink();
+
     final dominantColor = _palette?.dominantColor?.color ?? Colors.purple;
     final textColor = Colors.white;
 
@@ -234,7 +495,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         IconButton(
-                          icon: Icon(Icons.keyboard_arrow_down, color: textColor),
+                          icon:
+                              Icon(Icons.keyboard_arrow_down, color: textColor),
                           onPressed: widget.onClose,
                         ),
                         Text(
@@ -264,7 +526,7 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _currentSongState?['title'] ?? '',
+                                currentSong['title'] ?? '',
                                 style: TextStyle(
                                   color: textColor,
                                   fontSize: 24,
@@ -273,7 +535,7 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                _currentSongState?['artist'] ?? '',
+                                currentSong['artist'] ?? '',
                                 style: TextStyle(
                                   color: textColor.withOpacity(0.7),
                                   fontSize: 18,
@@ -330,8 +592,9 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                             IconButton(
                                               icon: Icon(Icons.clear_all,
                                                   color: textColor),
-                                              onPressed: widget
-                                                  .musicService.clearQueue,
+                                              onPressed: ref
+                                                  .read(musicServiceProvider)
+                                                  .clearQueue,
                                             ),
                                           ],
                                         ),
@@ -339,36 +602,47 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                       Expanded(
                                         child: StreamBuilder<
                                             List<Map<String, dynamic>>>(
-                                          stream:
-                                              widget.musicService.queueStream,
+                                          stream: ref
+                                              .read(musicServiceProvider)
+                                              .queueStream,
                                           builder: (context, snapshot) {
                                             if (snapshot.hasError) {
-                                              print('Queue stream error: ${snapshot.error}');
-                                              return Center(child: Text('Error loading queue'));
+                                              print(
+                                                  'Queue stream error: ${snapshot.error}');
+                                              return Center(
+                                                  child: Text(
+                                                      'Error loading queue'));
                                             }
 
                                             if (!snapshot.hasData) {
                                               print('No queue data available');
-                                              return const Center(child: CircularProgressIndicator());
+                                              return const Center(
+                                                  child:
+                                                      CircularProgressIndicator());
                                             }
 
                                             final queue = snapshot.data!;
-                                            print('Queue length in UI: ${queue.length}');
+                                            print(
+                                                'Queue length in UI: ${queue.length}');
 
                                             if (queue.isEmpty) {
-                                              return Center(child: Text('Queue is empty', style: TextStyle(color: Colors.grey)));
+                                              return Center(
+                                                  child: Text('Queue is empty',
+                                                      style: TextStyle(
+                                                          color: Colors.grey)));
                                             }
 
                                             return ReorderableListView.builder(
                                               itemCount: queue.length,
                                               onReorder: (oldIndex, newIndex) {
-                                                widget.musicService
+                                                ref
+                                                    .read(musicServiceProvider)
                                                     .reorderQueue(
-                                                  oldIndex,
-                                                  newIndex > oldIndex
-                                                      ? newIndex - 1
-                                                      : newIndex,
-                                                );
+                                                      oldIndex,
+                                                      newIndex > oldIndex
+                                                          ? newIndex - 1
+                                                          : newIndex,
+                                                    );
                                               },
                                               itemBuilder: (context, index) {
                                                 final song = queue[index];
@@ -426,35 +700,54 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                               builder: (context) => Container(
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF1C1C1E),
-                                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                                  borderRadius: BorderRadius.vertical(
+                                      top: Radius.circular(16)),
                                 ),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     ListTile(
-                                      leading: Icon(Icons.playlist_add, color: Colors.white),
+                                      leading: Icon(Icons.playlist_add,
+                                          color: Colors.white),
                                       title: Text(
                                         'Add to Playlist',
-                                        style: GoogleFonts.lato(color: Colors.white),
+                                        style: GoogleFonts.lato(
+                                            color: Colors.white),
                                       ),
                                       onTap: () {
                                         Navigator.pop(context);
-                                        _showPlaylistSelector(context, _currentSongState!);
+                                        _showPlaylistSelector(
+                                            context, currentSong);
                                       },
                                     ),
                                     ListTile(
                                       leading: FutureBuilder<bool>(
-                                        future: widget.musicService.isSongDownloaded(_currentSongState?['id'] ?? ''),
+                                        future: ref
+                                            .read(musicServiceProvider)
+                                            .isSongDownloaded(
+                                                currentSong?['id'] ?? ''),
                                         builder: (context, snapshot) {
-                                          final isDownloaded = snapshot.data ?? false;
-                                          return StreamBuilder<Map<String, double>>(
-                                            stream: widget.musicService.downloadProgressStream,
-                                            builder: (context, progressSnapshot) {
-                                              final progress = progressSnapshot.data?[_currentSongState?['id']] ?? 0.0;
-                                              final isDownloading = widget.musicService.isDownloading(_currentSongState?['id'] ?? '');
+                                          final isDownloaded =
+                                              snapshot.data ?? false;
+                                          return StreamBuilder<
+                                              Map<String, double>>(
+                                            stream: ref
+                                                .read(musicServiceProvider)
+                                                .downloadProgressStream,
+                                            builder:
+                                                (context, progressSnapshot) {
+                                              final progress =
+                                                  progressSnapshot.data?[
+                                                          currentSong?['id']] ??
+                                                      0.0;
+                                              final isDownloading = ref
+                                                  .read(musicServiceProvider)
+                                                  .isDownloading(
+                                                      currentSong?['id'] ?? '');
 
                                               if (isDownloaded) {
-                                                return Icon(Icons.download_done, color: Colors.green);
+                                                return Icon(Icons.download_done,
+                                                    color: Colors.green);
                                               }
 
                                               if (isDownloading) {
@@ -463,7 +756,10 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                                   children: [
                                                     CircularProgressIndicator(
                                                       value: progress,
-                                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                                  Color>(
+                                                              Colors.white),
                                                       strokeWidth: 2,
                                                     ),
                                                     Text(
@@ -477,59 +773,78 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                                 );
                                               }
 
-                                              return Icon(Icons.download, color: Colors.white);
+                                              return Icon(Icons.download,
+                                                  color: Colors.white);
                                             },
                                           );
                                         },
                                       ),
                                       title: Text(
                                         'Download',
-                                        style: GoogleFonts.lato(color: Colors.white),
+                                        style: GoogleFonts.lato(
+                                            color: Colors.white),
                                       ),
                                       onTap: () async {
-                                        if (_currentSongState == null) return;
-                                        
+                                        if (currentSong == null) return;
+
                                         try {
-                                          final isDownloaded = await widget.musicService
-                                              .isSongDownloaded(_currentSongState!['id']);
+                                          final isDownloaded = await ref
+                                              .read(musicServiceProvider)
+                                              .isSongDownloaded(
+                                                  currentSong!['id']);
 
                                           if (!isDownloaded) {
                                             // Ensure all required fields are present
                                             final songToDownload = {
-                                              ..._currentSongState!,
-                                              'audio_url': _currentSongState!['audio_url'],
-                                              'album_id': _currentSongState!['album_id'],
-                                              'album_title': _currentSongState!['album_title'] ?? '',
-                                              'image_url': _currentSongState!['image_url'],
-                                              'album_image_url': _currentSongState!['album_image_url'] ?? _currentSongState!['image_url'],
+                                              ...currentSong!,
+                                              'audio_url':
+                                                  currentSong!['audio_url'],
+                                              'album_id':
+                                                  currentSong!['album_id'],
+                                              'album_title':
+                                                  currentSong!['album_title'] ??
+                                                      '',
+                                              'image_url':
+                                                  currentSong!['image_url'],
+                                              'album_image_url': currentSong![
+                                                      'album_image_url'] ??
+                                                  currentSong!['image_url'],
                                             };
 
                                             // Close the modal bottom sheet
                                             Navigator.pop(context);
 
                                             // Start download
-                                            await widget.musicService.downloadSong(songToDownload);
-                                            
-                                            ScaffoldMessenger.of(context).showSnackBar(
+                                            await ref
+                                                .read(musicServiceProvider)
+                                                .downloadSong(songToDownload);
+
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
                                               SnackBar(
-                                                content: Text('Download started'),
+                                                content:
+                                                    Text('Download started'),
                                                 duration: Duration(seconds: 2),
                                               ),
                                             );
                                           } else {
                                             Navigator.pop(context);
-                                            ScaffoldMessenger.of(context).showSnackBar(
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
                                               SnackBar(
-                                                content: Text('Song already downloaded'),
+                                                content: Text(
+                                                    'Song already downloaded'),
                                                 duration: Duration(seconds: 2),
                                               ),
                                             );
                                           }
                                         } catch (e) {
                                           Navigator.pop(context);
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
                                             SnackBar(
-                                              content: Text('Download failed: ${e.toString()}'),
+                                              content: Text(
+                                                  'Download failed: ${e.toString()}'),
                                               backgroundColor: Colors.red,
                                               duration: Duration(seconds: 3),
                                             ),
@@ -549,14 +864,15 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                   Padding(
                     padding: const EdgeInsets.all(32.0),
                     child: StreamBuilder<Duration>(
-                      stream: widget.musicService.positionStream,
+                      stream: ref.read(musicServiceProvider).positionStream,
                       builder: (context, snapshot) {
                         final position = snapshot.data ?? Duration.zero;
                         return StreamBuilder<Duration?>(
-                          stream: widget.musicService.durationStream,
+                          stream: ref.read(musicServiceProvider).durationStream,
                           builder: (context, snapshot) {
                             final duration = snapshot.data ?? Duration.zero;
-                            return _buildProgressBar(position, duration, textColor);
+                            return _buildProgressBar(
+                                position, duration, textColor);
                           },
                         );
                       },
@@ -564,10 +880,7 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                   ),
                   Padding(
                     padding: const EdgeInsets.only(
-                      left: 16.0,
-                      right: 16.0,
-                      bottom: 32.0
-                    ),
+                        left: 16.0, right: 16.0, bottom: 32.0),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
@@ -579,24 +892,33 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                             setState(() {
                               _isShuffleEnabled = newShuffleState;
                             });
-                            await widget.musicService.setShuffleMode(newShuffleState);
+                            await ref
+                                .read(musicServiceProvider)
+                                .setShuffleMode(newShuffleState);
                             if (newShuffleState) {
-                              await widget.musicService.shuffleQueue();
+                              await ref
+                                  .read(musicServiceProvider)
+                                  .shuffleQueue();
                             } else {
-                              await widget.musicService.restoreOriginalQueue();
+                              await ref
+                                  .read(musicServiceProvider)
+                                  .restoreOriginalQueue();
                             }
                           },
                         ),
                         IconButton(
                           icon: Icon(Icons.skip_previous, color: textColor),
-                          iconSize: 40,  // Reduced from 50
-                          onPressed: widget.musicService.playPrevious,
+                          iconSize: 40, // Reduced from 50
+                          onPressed:
+                              ref.read(musicServiceProvider).playPrevious,
                         ),
                         StreamBuilder<PlayerState>(
-                          stream: widget.musicService.playerStateStream,
+                          stream:
+                              ref.read(musicServiceProvider).playerStateStream,
                           builder: (context, snapshot) {
                             final playerState = snapshot.data;
-                            final processingState = playerState?.processingState;
+                            final processingState =
+                                playerState?.processingState;
                             final playing = playerState?.playing;
 
                             if (processingState == ProcessingState.loading ||
@@ -606,8 +928,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                 width: 50.0,
                                 height: 50.0,
                                 child: const CircularProgressIndicator(
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
                                 ),
                               );
                             }
@@ -619,23 +941,26 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                                     : Icons.play_circle_fill,
                                 color: Colors.white,
                               ),
-                              iconSize: 56,  // Reduced from 60
+                              iconSize: 56, // Reduced from 60
                               onPressed: playing == true
-                                  ? widget.musicService.pause
-                                  : widget.musicService.resume,
+                                  ? ref.read(musicServiceProvider).pause
+                                  : ref.read(musicServiceProvider).resume,
                             );
                           },
                         ),
                         IconButton(
                           icon: Icon(Icons.skip_next, color: textColor),
-                          iconSize: 40,  // Reduced from 50
-                          onPressed: widget.musicService.playNext,
+                          iconSize: 40, // Reduced from 50
+                          onPressed: ref.read(musicServiceProvider).playNext,
                         ),
                         _buildControlButton(
                           'assets/icons/repeat.svg',
                           _loopMode != LoopMode.off,
                           () {
-                            widget.musicService.cycleLoopMode().then((_) {
+                            ref
+                                .read(musicServiceProvider)
+                                .cycleLoopMode()
+                                .then((_) {
                               setState(() {
                                 switch (_loopMode) {
                                   case LoopMode.off:
@@ -655,6 +980,8 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
                       ],
                     ),
                   ),
+                  _buildLyricsDisplay(),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -678,8 +1005,34 @@ class _FullScreenPlayerState extends State<FullScreenPlayer> {
           'audio_url': song['audio_url'] ?? '',
           'id': song['id'],
         },
-        musicService: widget.musicService,
+        musicService: ref.read(musicServiceProvider),
       ),
     );
+  }
+
+  Future<String?> _getLyricsForPosition(
+      String songId, Duration position) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('songs')
+          .select('song_lyrics')
+          .eq('id', songId)
+          .single();
+
+      if (response == null || response['song_lyrics'] == null) {
+        return null;
+      }
+
+      final lyrics = response['song_lyrics'] as String;
+      final lines = lyrics.split('\n');
+
+      // For now, return a static line based on position
+      // In a real implementation, you would parse timestamps and return the appropriate line
+      final currentLineIndex = (position.inSeconds % lines.length);
+      return lines[currentLineIndex];
+    } catch (e) {
+      print('Error fetching lyrics: $e');
+      return null;
+    }
   }
 }

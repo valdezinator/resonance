@@ -7,28 +7,30 @@ import '../widgets/bottom_player.dart';
 import '../services/music_service.dart';
 import '../widgets/floating_player_mixin.dart';
 import 'privacy_settings_page.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SettingsPage extends StatefulWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   final Map<String, dynamic>? currentSong;
   final Function(Map<String, dynamic>?) onSongPlay;
   final MusicService musicService;
-  final int selectedIndex;              // Add this
-  final Function(int) onIndexChanged;   // Add this
+  final int selectedIndex; // Add this
+  final Function(int) onIndexChanged; // Add this
 
   const SettingsPage({
     Key? key,
     this.currentSong,
     required this.onSongPlay,
     required this.musicService,
-    required this.selectedIndex,        // Add this
-    required this.onIndexChanged,       // Add this
+    required this.selectedIndex, // Add this
+    required this.onIndexChanged, // Add this
   }) : super(key: key);
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> with FloatingPlayerMixin {
+class _SettingsPageState extends ConsumerState<SettingsPage>
+    with FloatingPlayerMixin {
   final User? currentUser = FirebaseAuth.instance.currentUser;
 
   // Add settings state
@@ -42,10 +44,10 @@ class _SettingsPageState extends State<SettingsPage> with FloatingPlayerMixin {
     try {
       // Sign out from Supabase
       await supabase.Supabase.instance.client.auth.signOut();
-      
+
       // Sign out from Google
       await GoogleSignIn().signOut();
-      
+
       // Sign out from Firebase
       await FirebaseAuth.instance.signOut();
 

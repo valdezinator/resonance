@@ -24,16 +24,45 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'screens/profile_image_page.dart';
 import 'providers/theme_provider.dart';
-import 'package:provider/provider.dart';  // Add this line
-import 'animations/page_transitions.dart';  // Add this line
+import 'package:provider/provider.dart' as provider; // Add prefix
+import 'animations/page_transitions.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/music_providers.dart';
+import '../providers/theme_providers.dart';
+import 'services/music_service.dart';
 
-class MyApp extends StatelessWidget {
+final songsFutureProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  return await ref.read(musicServiceProvider).getQuickPlaySongs();
+});
+
+final albumsFutureProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  return await ref.read(musicServiceProvider).getAlbums();
+});
+
+final artistsFutureProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  return await ref.read(musicServiceProvider).getRecommendedArtists();
+});
+
+final personalizedPlaylistsFutureProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  return await ref.read(musicServiceProvider).getPersonalizedPlaylists();
+});
+
+final topChartsFutureProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  return await ref.read(musicServiceProvider).getTopCharts();
+});
+
+class MyApp extends ConsumerWidget {
   final User? user;
 
   const MyApp({Key? key, required this.user}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       title: 'Music App',
       debugShowCheckedModeBanner: false,
@@ -42,25 +71,20 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFF0C0F14),
       ),
-      home: HomePage(),
+      home: const HomePage(),
     );
   }
 }
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
+  const HomePage({super.key});
+
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  final MusicService _musicService = MusicService();
+class _HomePageState extends ConsumerState<HomePage> {
   String? _profileImagePath;
-  Map<String, dynamic>? currentSong;
-  late Future<List<Map<String, dynamic>>> _songsFuture;
-  late Future<List<Map<String, dynamic>>> _albumsFuture;
-  late Future<List<Map<String, dynamic>>> _artistsFuture;
-  late Future<List<Map<String, dynamic>>> _personalizedPlaylistsFuture;
-  late Future<List<Map<String, dynamic>>> _topChartsFuture;
   int _selectedIndex = 0;
   static const int _pageSize = 10;
   int _currentPage = 0;
@@ -84,12 +108,14 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _initServices() async {
     try {
-      await _musicService.init();
+      await ref.read(musicServiceProvider).init();
       _loadMoreSongs();
-      _albumsFuture = _musicService.getAlbums();
-      _artistsFuture = _musicService.getRecommendedArtists();
-      _personalizedPlaylistsFuture = _musicService.getPersonalizedPlaylists();
-      _topChartsFuture = _musicService.getTopCharts();
+      // Refresh all future providers
+      ref.refresh(songsFutureProvider);
+      ref.refresh(albumsFutureProvider);
+      ref.refresh(artistsFutureProvider);
+      ref.refresh(personalizedPlaylistsFutureProvider);
+      ref.refresh(topChartsFutureProvider);
     } catch (e) {
       print('Error initializing services: $e');
     }
@@ -113,10 +139,10 @@ class _HomePageState extends State<HomePage> {
 
     try {
       // First try to get from network
-      final newSongs = await _musicService.getQuickPlaySongs(
-        offset: _currentPage * _pageSize,
-        limit: _pageSize,
-      );
+      final newSongs = await ref.read(musicServiceProvider).getQuickPlaySongs(
+            offset: _currentPage * _pageSize,
+            limit: _pageSize,
+          );
 
       setState(() {
         _songs.addAll(newSongs);
@@ -126,8 +152,9 @@ class _HomePageState extends State<HomePage> {
       });
     } catch (e) {
       // If network fails, load downloaded songs
-      final downloadedSongs = await _musicService.getDownloadedSongs();
-      
+      final downloadedSongs =
+          await ref.read(musicServiceProvider).getDownloadedSongs();
+
       setState(() {
         _songs = downloadedSongs;
         _hasMore = false;
@@ -136,7 +163,39 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _playSong(Map<String, dynamic> song, int index) async {
+    try {
+      final audioUrl = song['audio_url'] as String?;
+      if (audioUrl == null || audioUrl.isEmpty) {
+        throw Exception('Song URL is missing');
+      }
+
+      // Update current song using the provider
+      ref.read(currentSongProvider.notifier).updateCurrentSong(song);
+
+      // Get next song from _songs array
+      final nextSongIndex = index + 1;
+      final nextSong =
+          nextSongIndex < _songs.length ? _songs[nextSongIndex] : null;
+
+      await ref.read(musicServiceProvider).playSong(
+            audioUrl,
+            currentSong: song,
+            subsequentSongs: nextSong != null ? [nextSong] : null,
+          );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to play song: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   Widget _buildFloatingBottomPlayer() {
+    final currentSong = ref.watch(currentSongProvider);
     if (currentSong == null) return const SizedBox.shrink();
 
     return Positioned(
@@ -157,13 +216,10 @@ class _HomePageState extends State<HomePage> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: BottomPlayer(
-            key: ValueKey(currentSong!['id']),
-            musicService: _musicService,
+            key: ValueKey(currentSong['id']),
             currentSong: currentSong,
             onClose: () {
-              setState(() {
-                currentSong = null;
-              });
+              ref.read(currentSongProvider.notifier).updateCurrentSong(null);
             },
           ),
         ),
@@ -173,10 +229,10 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    
+    final theme = ref.watch(themeProvider);
+
     return Scaffold(
-      backgroundColor: themeProvider.backgroundColor,
+      backgroundColor: theme.backgroundColor,
       // backgroundColor: Colors.white10,
       body: SafeArea(
         child: Stack(
@@ -185,15 +241,15 @@ class _HomePageState extends State<HomePage> {
               decoration: BoxDecoration(),
               child: _selectedIndex == 1
                   ? SearchPage(
-                      currentSong: currentSong,
+                      currentSong: ref.watch(currentSongProvider),
                       onSongPlay: (song) {
-                        setState(() {
-                          currentSong = song;
-                        });
+                        ref
+                            .read(currentSongProvider.notifier)
+                            .updateCurrentSong(song);
                       },
-                      musicService: _musicService,
-                      selectedIndex: _selectedIndex,  // Add this
-                      onIndexChanged: (index) {      // Add this
+                      musicService: ref.read(musicServiceProvider),
+                      selectedIndex: _selectedIndex,
+                      onIndexChanged: (index) {
                         setState(() {
                           _selectedIndex = index;
                         });
@@ -201,7 +257,7 @@ class _HomePageState extends State<HomePage> {
                     )
                   : _selectedIndex == 2
                       ? LibraryPage(
-                          selectedIndex: _selectedIndex,  // Add this line
+                          selectedIndex: _selectedIndex,
                           onNavigate: (index) {
                             setState(() {
                               _selectedIndex = index;
@@ -215,7 +271,7 @@ class _HomePageState extends State<HomePage> {
                         )
                       : _selectedIndex == 3
                           ? ProfileImagePage(
-                              musicService: _musicService,
+                              musicService: ref.read(musicServiceProvider),
                             )
                           : SingleChildScrollView(
                               child: Padding(
@@ -246,17 +302,21 @@ class _HomePageState extends State<HomePage> {
                                             Navigator.push(
                                               context,
                                               MaterialPageRoute(
-                                                builder: (context) => ProfileImagePage(
-                                                  musicService: _musicService,
+                                                builder: (context) =>
+                                                    ProfileImagePage(
+                                                  musicService: ref.read(
+                                                      musicServiceProvider),
                                                 ),
                                               ),
                                             ).then((_) => _loadProfileImage());
                                           },
                                           child: CircleAvatar(
                                             radius: 20,
-                                            backgroundImage: _profileImagePath != null
-                                                ? FileImage(File(_profileImagePath!))
-                                                : null,
+                                            backgroundImage:
+                                                _profileImagePath != null
+                                                    ? FileImage(File(
+                                                        _profileImagePath!))
+                                                    : null,
                                             child: _profileImagePath == null
                                                 ? Icon(Icons.person,
                                                     color: Colors.white)
@@ -272,22 +332,22 @@ class _HomePageState extends State<HomePage> {
                                       children: [
                                         Chip(
                                           label: Text('Feel Good',
-                                              style:
-                                                  TextStyle(color: Colors.white)),
+                                              style: TextStyle(
+                                                  color: Colors.white)),
                                           backgroundColor: Colors.grey[800],
                                         ),
                                         SizedBox(width: 8),
                                         Chip(
                                           label: Text('Party',
-                                              style:
-                                                  TextStyle(color: Colors.white)),
+                                              style: TextStyle(
+                                                  color: Colors.white)),
                                           backgroundColor: Colors.grey[800],
                                         ),
                                         SizedBox(width: 8),
                                         Chip(
                                           label: Text('Party',
-                                              style:
-                                                  TextStyle(color: Colors.white)),
+                                              style: TextStyle(
+                                                  color: Colors.white)),
                                           backgroundColor: Colors.grey[800],
                                         ),
                                       ],
@@ -324,34 +384,23 @@ class _HomePageState extends State<HomePage> {
                                     // Albums list
                                     SizedBox(
                                       height: 220,
-                                      child:
-                                          FutureBuilder<List<Map<String, dynamic>>>(
-                                        future: _albumsFuture,
-                                        builder: (context, snapshot) {
-                                          if (snapshot.connectionState ==
-                                              ConnectionState.waiting) {
-                                            return Center(
-                                                child: CircularProgressIndicator());
-                                          }
-
-                                          if (snapshot.hasError) {
-                                            return Text(
-                                              'Error loading albums: ${snapshot.error}',
-                                              style: TextStyle(color: Colors.red),
-                                            );
-                                          }
-
-                                          final albums = snapshot.data ?? [];
-
-                                          return ListView.builder(
-                                            scrollDirection: Axis.horizontal,
-                                            itemCount: albums.length,
-                                            itemBuilder: (context, index) {
-                                              return _buildAlbumTile(albums[index]);
-                                            },
-                                          );
-                                        },
-                                      ),
+                                      child: ref
+                                          .watch(albumsFutureProvider)
+                                          .when(
+                                            data: (albums) => ListView.builder(
+                                              scrollDirection: Axis.horizontal,
+                                              itemCount: albums.length,
+                                              itemBuilder: (context, index) {
+                                                return _buildAlbumTile(
+                                                    albums[index]);
+                                              },
+                                            ),
+                                            loading: () => Center(
+                                                child:
+                                                    CircularProgressIndicator()),
+                                            error: (error, stack) => Text(
+                                                'Error loading albums: $error'),
+                                          ),
                                     ),
 
                                     // Recommended Artists section
@@ -371,35 +420,23 @@ class _HomePageState extends State<HomePage> {
                                     // Artists list
                                     SizedBox(
                                       height: 160,
-                                      child:
-                                          FutureBuilder<List<Map<String, dynamic>>>(
-                                        future: _artistsFuture,
-                                        builder: (context, snapshot) {
-                                          if (snapshot.connectionState ==
-                                              ConnectionState.waiting) {
-                                            return Center(
-                                                child: CircularProgressIndicator());
-                                          }
-
-                                          if (snapshot.hasError) {
-                                            return Text(
-                                              'Error loading artists: ${snapshot.error}',
-                                              style: TextStyle(color: Colors.red),
-                                            );
-                                          }
-
-                                          final artists = snapshot.data ?? [];
-
-                                          return ListView.builder(
-                                            scrollDirection: Axis.horizontal,
-                                            itemCount: artists.length,
-                                            itemBuilder: (context, index) {
-                                              return _buildArtistTile(
-                                                  artists[index]);
-                                            },
-                                          );
-                                        },
-                                      ),
+                                      child: ref
+                                          .watch(artistsFutureProvider)
+                                          .when(
+                                            data: (artists) => ListView.builder(
+                                              scrollDirection: Axis.horizontal,
+                                              itemCount: artists.length,
+                                              itemBuilder: (context, index) {
+                                                return _buildArtistTile(
+                                                    artists[index]);
+                                              },
+                                            ),
+                                            loading: () => Center(
+                                                child:
+                                                    CircularProgressIndicator()),
+                                            error: (error, stack) => Text(
+                                                'Error loading artists: $error'),
+                                          ),
                                     ),
 
                                     SizedBox(height: 32),
@@ -498,7 +535,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    _musicService.dispose();
+    ref.read(musicServiceProvider).dispose();
     super.dispose();
   }
 
@@ -605,11 +642,9 @@ class _HomePageState extends State<HomePage> {
           SlideUpPageRoute(
             child: AlbumDetailsPage(
               album: album,
-              musicService: _musicService,
+              musicService: ref.read(musicServiceProvider),
               onSongPlay: (song) {
-                setState(() {
-                  currentSong = song;
-                });
+                ref.read(currentSongProvider.notifier).updateCurrentSong(song);
               },
               selectedIndex: _selectedIndex,
               onIndexChanged: (index) {
@@ -617,7 +652,7 @@ class _HomePageState extends State<HomePage> {
                   _selectedIndex = index;
                 });
               },
-              currentSong: currentSong,
+              currentSong: ref.watch(currentSongProvider),
             ),
           ),
         );
@@ -692,15 +727,13 @@ class _HomePageState extends State<HomePage> {
           MaterialPageRoute(
             builder: (context) => ArtistDetailsPage(
               artist: artist,
-              musicService: _musicService,
+              musicService: ref.read(musicServiceProvider),
               onSongPlay: (song) {
-                setState(() {
-                  currentSong = song;
-                });
+                ref.read(currentSongProvider.notifier).updateCurrentSong(song);
               },
-              currentSong: currentSong,
-              selectedIndex: _selectedIndex,  // Add this
-              onIndexChanged: (index) {      // Add this
+              currentSong: ref.watch(currentSongProvider),
+              selectedIndex: _selectedIndex,
+              onIndexChanged: (index) {
                 setState(() {
                   _selectedIndex = index;
                 });
@@ -756,64 +789,37 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildSongsList() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 3,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-      ),
-      itemCount: _songs.length + (_hasMore ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index >= _songs.length) {
-          _loadMoreSongs();
-          return Center(child: CircularProgressIndicator());
-        }
-
-        final song = _songs[index];
-        return GestureDetector(
-          onTap: () async {
-            try {
-              final audioUrl = song['audio_url'] as String?;
-              if (audioUrl == null || audioUrl.isEmpty) {
-                throw Exception('Song URL is missing');
+    return ref.watch(songsFutureProvider).when(
+          data: (songs) => GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 3,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+            ),
+            itemCount: songs.length + (_hasMore ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (index >= songs.length) {
+                _loadMoreSongs();
+                return Center(child: CircularProgressIndicator());
               }
 
-              setState(() {
-                currentSong = song;
-              });
-
-              // Get next song from _songs array
-              final nextSongIndex = index + 1;
-              final nextSong =
-                  nextSongIndex < _songs.length ? _songs[nextSongIndex] : null;
-
-              await _musicService.playSong(
-                audioUrl,
-                currentSong: song,
-                subsequentSongs: nextSong != null ? [nextSong] : null, // Change from nextSong to subsequentSongs
-              );
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Failed to play song: ${e.toString()}'),
-                  backgroundColor: Colors.red,
-                  duration: Duration(seconds: 3),
+              final song = songs[index];
+              return GestureDetector(
+                onTap: () => _playSong(song, index),
+                child: _buildSongTile(
+                  song['title'] ?? 'Unknown Title',
+                  song['artist'] ?? 'Unknown Artist',
+                  song['image_url'] ?? '',
                 ),
               );
-            }
-          },
-          child: _buildSongTile(
-            song['title'] ?? 'Unknown Title',
-            song['artist'] ?? 'Unknown Artist',
-            song['image_url'] ?? '',
-            // textStyle: GoogleFonts.lato(),
+            },
           ),
+          loading: () => Center(child: CircularProgressIndicator()),
+          error: (error, stack) => _buildErrorWidget(error.toString()),
         );
-      },
-    );
   }
 
   Widget _buildMadeForYou() {
@@ -831,62 +837,56 @@ class _HomePageState extends State<HomePage> {
         SizedBox(height: 16),
         SizedBox(
           height: 200,
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _personalizedPlaylistsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(child: CircularProgressIndicator());
-              }
-
-              final playlists = snapshot.data ?? [];
-              return ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: playlists.length,
-                itemBuilder: (context, index) {
-                  final playlist = playlists[index];
-                  return Container(
-                    width: 160,
-                    margin: EdgeInsets.only(right: 16),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.purple.withOpacity(0.6),
-                          Colors.blue.withOpacity(0.6),
-                        ],
+          child: ref.watch(personalizedPlaylistsFutureProvider).when(
+                data: (playlists) => ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: playlists.length,
+                  itemBuilder: (context, index) {
+                    final playlist = playlists[index];
+                    return Container(
+                      width: 160,
+                      margin: EdgeInsets.only(right: 16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.purple.withOpacity(0.6),
+                            Colors.blue.withOpacity(0.6),
+                          ],
+                        ),
                       ),
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            playlist['name'],
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              playlist['name'],
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            playlist['description'],
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
+                            SizedBox(height: 8),
+                            Text(
+                              playlist['description'],
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+                    );
+                  },
+                ),
+                loading: () => Center(child: CircularProgressIndicator()),
+                error: (error, stack) => Text('Error: $error'),
+              ),
         ),
       ],
     );
@@ -905,57 +905,51 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         SizedBox(height: 16),
-        FutureBuilder<List<Map<String, dynamic>>>(
-          future: _topChartsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(child: CircularProgressIndicator());
-            }
-
-            final charts = snapshot.data ?? [];
-            return Container(
-              constraints: BoxConstraints(maxHeight: 300), // Add height constraint
-              child: ListView.builder(
-                shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
-                itemCount: math.min(5, charts.length),
-                itemBuilder: (context, index) {
-                  final song = charts[index]['songs'];
-                  return Container(
-                    margin: EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: ListTile(
-                      leading: Text(
-                        '#${index + 1}',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+        ref.watch(topChartsFutureProvider).when(
+              data: (charts) => Container(
+                constraints: BoxConstraints(maxHeight: 300),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  itemCount: math.min(5, charts.length),
+                  itemBuilder: (context, index) {
+                    final song = charts[index]['songs'];
+                    return Container(
+                      margin: EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListTile(
+                        leading: Text(
+                          '#${index + 1}',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
+                        title: Text(
+                          song['title'],
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        subtitle: Text(
+                          song['artist'],
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                        trailing: Icon(Icons.play_circle_filled,
+                            color: Colors.white, size: 32),
+                        onTap: () {
+                          // Handle song play
+                        },
                       ),
-                      title: Text(
-                        song['title'],
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      subtitle: Text(
-                        song['artist'],
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                      trailing: Icon(Icons.play_circle_filled,
-                          color: Colors.white, size: 32),
-                      onTap: () {
-                        // Handle song play
-                      },
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            );
-          },
-        ),
+              loading: () => Center(child: CircularProgressIndicator()),
+              error: (error, stack) => Text('Error: $error'),
+            ),
       ],
     );
   }

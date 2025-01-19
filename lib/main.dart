@@ -9,8 +9,12 @@ import 'config/supabase_config.dart';
 import 'login_page.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'config/auth_config.dart';
-import 'package:provider/provider.dart';
+import 'package:provider/provider.dart' as provider;
 import 'providers/theme_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/theme_providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/theme_providers.dart';
 
 Future<void> main() async {
   try {
@@ -29,9 +33,11 @@ Future<void> main() async {
     );
 
     runApp(
-      ChangeNotifierProvider(
-        create: (_) => ThemeProvider(),
-        child: const AuthApp(),
+      ProviderScope(
+        child: provider.ChangeNotifierProvider(
+          create: (_) => ThemeProvider(),
+          child: const AuthApp(),
+        ),
       ),
     );
   } catch (e) {
@@ -40,26 +46,25 @@ Future<void> main() async {
   }
 }
 
-class AuthApp extends StatelessWidget {
+// Convert AuthApp to ConsumerWidget
+class AuthApp extends ConsumerWidget {
   const AuthApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, child) {
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'Resonance',
-          theme: ThemeData(
-            brightness: Brightness.dark,
-            scaffoldBackgroundColor: themeProvider.backgroundColor,
-            textTheme: GoogleFonts.montserratTextTheme(),
-          ),
-          initialRoute: '/',
-          routes: {
-            '/': (context) => const AuthWrapper(),
-          },
-        );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Resonance',
+      theme: ThemeData(
+        brightness: theme.isDarkMode ? Brightness.dark : Brightness.light,
+        scaffoldBackgroundColor: theme.backgroundColor,
+        textTheme: GoogleFonts.montserratTextTheme(),
+      ),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const AuthWrapper(),
       },
     );
   }
@@ -77,12 +82,12 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const LoadingScreen();
         }
-        
+
         // If we have a user, go to MyApp, otherwise go to SignInPage
         if (snapshot.hasData && snapshot.data != null) {
           return MyApp(user: snapshot.data);
         }
-        
+
         return const SignInPage();
       },
     );
@@ -135,8 +140,8 @@ class _SignInPageState extends State<SignInPage> {
       'email',
       'profile',
     ],
-    clientId: AuthConfig.androidClientId,  // Use Android client ID for mobile
-    serverClientId: AuthConfig.googleClientId,  // Use Web client ID for server
+    clientId: AuthConfig.androidClientId, // Use Android client ID for mobile
+    serverClientId: AuthConfig.googleClientId, // Use Web client ID for server
   );
   bool _isSigningIn = false;
 
@@ -151,13 +156,15 @@ class _SignInPageState extends State<SignInPage> {
         throw Exception('Sign in cancelled by user');
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      
-      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+
+      final UserCredential userCredential =
+          await _auth.signInWithCredential(credential);
       final User? firebaseUser = userCredential.user;
 
       if (firebaseUser != null) {
@@ -165,7 +172,8 @@ class _SignInPageState extends State<SignInPage> {
           final supabaseClient = supabase.Supabase.instance.client;
 
           // Sign in with Supabase first
-          final supabaseAuthResponse = await supabaseClient.auth.signInWithIdToken(
+          final supabaseAuthResponse =
+              await supabaseClient.auth.signInWithIdToken(
             provider: supabase.OAuthProvider.google,
             idToken: googleAuth.idToken!,
             accessToken: googleAuth.accessToken,
@@ -173,19 +181,17 @@ class _SignInPageState extends State<SignInPage> {
 
           if (supabaseAuthResponse.session != null) {
             final userId = supabaseAuthResponse.session!.user.id;
-            
+
             // Create or update user record in public.users table
-            await supabaseClient
-                .from('users')
-                .upsert({
-                  'id': userId,
-                  'display_name': firebaseUser.displayName ?? '',
-                  'photo_url': firebaseUser.photoURL ?? '',
-                  'firebase_uid': firebaseUser.uid,
-                }, onConflict: 'id');
+            await supabaseClient.from('users').upsert({
+              'id': userId,
+              'display_name': firebaseUser.displayName ?? '',
+              'photo_url': firebaseUser.photoURL ?? '',
+              'firebase_uid': firebaseUser.uid,
+            }, onConflict: 'id');
 
             print('User record created/updated in public.users table');
-            
+
             // Update or create user data
             await supabaseClient.auth.updateUser(supabase.UserAttributes(
               data: {
@@ -196,7 +202,8 @@ class _SignInPageState extends State<SignInPage> {
               },
             ));
 
-            print('Supabase session established: ${supabaseAuthResponse.session?.user.id}');
+            print(
+                'Supabase session established: ${supabaseAuthResponse.session?.user.id}');
           }
 
           // Continue with navigation...
@@ -253,13 +260,17 @@ class _SignInPageState extends State<SignInPage> {
               const SizedBox(height: 20),
               Text(
                 'Sign In',
-                style: GoogleFonts.montserrat().copyWith(color: Colors.white, fontSize: 16),
+                style: GoogleFonts.montserrat()
+                    .copyWith(color: Colors.white, fontSize: 16),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               Text(
                 'Welcome Back',
-                style: GoogleFonts.montserrat().copyWith(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w500),
+                style: GoogleFonts.montserrat().copyWith(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w500),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),

@@ -30,14 +30,16 @@ class MusicService {
   // Add these properties
   final Map<String, double> _downloadProgress = {};
   final Map<String, bool> _isDownloading = {};
-  final _downloadProgressController = StreamController<Map<String, double>>.broadcast();
+  final _downloadProgressController =
+      StreamController<Map<String, double>>.broadcast();
 
   static const String DOWNLOAD_STATE_KEY = 'download_state';
   static const String DOWNLOAD_PROGRESS_KEY = 'download_progress';
 
   // Add these properties
   // Replace 192.168.1.xxx with your actual IP address
-  final String _pythonApiBaseUrl = 'http://192.168.29.10:8000';  // For physical device
+  final String _pythonApiBaseUrl =
+      'http://192.168.29.10:8000'; // For physical device
   // OR
   // final String _pythonApiBaseUrl = 'http://10.0.2.2:8000';  // For Android emulator
 
@@ -84,9 +86,11 @@ class MusicService {
 
   Future<void> _initDownloadState() async {
     try {
-      final savedStates = await _localStorageService.getData(DOWNLOAD_STATE_KEY);
-      final savedProgress = await _localStorageService.getData(DOWNLOAD_PROGRESS_KEY);
-      
+      final savedStates =
+          await _localStorageService.getData(DOWNLOAD_STATE_KEY);
+      final savedProgress =
+          await _localStorageService.getData(DOWNLOAD_PROGRESS_KEY);
+
       if (savedStates != null) {
         _isDownloading.clear();
         Map<String, dynamic> states = Map<String, dynamic>.from(savedStates);
@@ -96,19 +100,21 @@ class MusicService {
           }
         });
       }
-      
+
       if (savedProgress != null) {
         _downloadProgress.clear();
-        Map<String, dynamic> progress = Map<String, dynamic>.from(savedProgress);
+        Map<String, dynamic> progress =
+            Map<String, dynamic>.from(savedProgress);
         progress.forEach((key, value) {
           if (value is num) {
             _downloadProgress[key] = value.toDouble();
           }
         });
       }
-      
+
       // Emit initial state immediately
-      _downloadProgressController.add(Map<String, double>.from(_downloadProgress));
+      _downloadProgressController
+          .add(Map<String, double>.from(_downloadProgress));
     } catch (e) {
       print('Error loading download state: $e');
     }
@@ -126,7 +132,7 @@ class MusicService {
       _downloadProgress.forEach((key, value) {
         progress[key] = value;
       });
-      
+
       await _localStorageService.saveData(DOWNLOAD_STATE_KEY, states);
       await _localStorageService.saveData(DOWNLOAD_PROGRESS_KEY, progress);
     } catch (e) {
@@ -138,7 +144,7 @@ class MusicService {
     await _encryptedStorage.init();
     await _initAudioPlayer();
     await _initDownloadState();
-    await checkIncompleteDownloads();  // Add this line
+    await checkIncompleteDownloads(); // Add this line
   }
 
   Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
@@ -182,13 +188,13 @@ class MusicService {
       return albums;
     } catch (e) {
       print('Error fetching albums from network: $e');
-      
+
       // Try to get cached albums first
       final cachedAlbums = await _localStorageService.getData(ALBUMS_CACHE_KEY);
       if (cachedAlbums != null) {
         return List<Map<String, dynamic>>.from(cachedAlbums);
       }
-      
+
       // If no cached albums, return downloaded albums
       return await getDownloadedAlbums();
     }
@@ -218,12 +224,9 @@ class MusicService {
     try {
       // Store original queue
       if (currentSong != null) {
-        _originalQueue = [
-          currentSong,
-          ...(subsequentSongs ?? [])
-        ];
+        _originalQueue = [currentSong, ...(subsequentSongs ?? [])];
         _currentQueue = List.from(_originalQueue);
-        
+
         // Apply shuffle if enabled
         if (_isShuffled) {
           await shuffleQueue();
@@ -234,9 +237,9 @@ class MusicService {
       if (currentSong != null) {
         await _playHistoryService.addToHistory(currentSong);
       }
-      
+
       final playlist = ConcatenatingAudioSource(children: []);
-      
+
       // Handle current song
       if (currentSong != null) {
         final source = await _getAudioSource(currentSong);
@@ -279,7 +282,7 @@ class MusicService {
               'audio_url': currentSong['audio_url'],
             }),
           );
-          
+
           if (response.statusCode != 200) {
             print('Failed to track song play: ${response.body}');
           }
@@ -297,20 +300,22 @@ class MusicService {
     try {
       // First try to get local file
       if (await isSongDownloaded(song['id'])) {
-        final metadata = await _localStorageService.getData('metadata_${song['id']}');
+        final metadata =
+            await _localStorageService.getData('metadata_${song['id']}');
         if (metadata != null && metadata['secure_file'] != null) {
           final filePath = await _getSecureFilePath(metadata['secure_file']);
           final file = File(filePath);
-          
+
           if (await file.exists()) {
             // Decrypt the file
             final encrypted = await file.readAsBytes();
             final decrypted = _xorEncrypt(encrypted, song['id']);
 
             // Create temporary file for playback
-            final tempFile = await File('${(await getTemporaryDirectory()).path}/temp_${song['id']}.mp3');
+            final tempFile = await File(
+                '${(await getTemporaryDirectory()).path}/temp_${song['id']}.mp3');
             await tempFile.writeAsBytes(decrypted);
-            
+
             return AudioSource.file(
               tempFile.path,
               tag: song,
@@ -318,7 +323,7 @@ class MusicService {
           }
         }
       }
-      
+
       // Fallback to online URL if available and we have network connectivity
       if (song['audio_url'] != null) {
         try {
@@ -334,7 +339,7 @@ class MusicService {
           return null;
         }
       }
-      
+
       return null;
     } catch (e) {
       print('Error creating audio source: $e');
@@ -460,19 +465,19 @@ class MusicService {
   Future<Map<String, dynamic>> getArtistPage(String artistName) async {
     try {
       print('Fetching artist page for: $artistName'); // Debug log
-      
+
       final response = await _supabase
           .from('artist_page')
           .select()
-          .eq('artist_name', artistName)  // Remove the $ symbol here
+          .eq('artist_name', artistName) // Remove the $ symbol here
           .single();
-      
+
       print('Artist page data: $response'); // Debug log
-      
+
       if (response == null) {
         throw Exception('No artist page found for: $artistName');
       }
-      
+
       return response;
     } catch (e) {
       print('Error fetching artist page: $e');
@@ -483,23 +488,26 @@ class MusicService {
   void _updateQueueStream() {
     try {
       final currentQueue = _playlist.sequence
-          .map((source) => source.tag as Map<String, dynamic>)  // Changed: directly use the tag
+          .map((source) => source.tag
+              as Map<String, dynamic>) // Changed: directly use the tag
           .toList();
 
-      print('Debug - Queue length before removal: ${currentQueue.length}');  // Debug log
-      
+      print(
+          'Debug - Queue length before removal: ${currentQueue.length}'); // Debug log
+
       // Skip the currently playing song
       if (currentQueue.isNotEmpty) {
         currentQueue.removeAt(0);
       }
 
-      print('Debug - Queue length after removal: ${currentQueue.length}');  // Debug log
-      print('Debug - Queue contents: $currentQueue');  // Debug log
-      
+      print(
+          'Debug - Queue length after removal: ${currentQueue.length}'); // Debug log
+      print('Debug - Queue contents: $currentQueue'); // Debug log
+
       _queueController.add(currentQueue);
     } catch (e) {
       print('Error updating queue stream: $e');
-      print('Error stack trace: ${StackTrace.current}');  // Added stack trace
+      print('Error stack trace: ${StackTrace.current}'); // Added stack trace
     }
   }
 
@@ -548,7 +556,7 @@ class MusicService {
 
   Future<List<Map<String, dynamic>>> getAlbumSongs(String albumId) async {
     final cacheKey = 'album_songs_$albumId';
-    
+
     try {
       // Try to fetch from network
       final response = await Supabase.instance.client
@@ -558,14 +566,14 @@ class MusicService {
           .order('track_number');
 
       final songs = List<Map<String, dynamic>>.from(response as List);
-      
+
       // Cache the results
       await _localStorageService.saveData(cacheKey, songs);
-      
+
       return songs;
     } catch (e) {
       print('Error fetching album songs from network: $e');
-      
+
       // If network fetch fails, try to get from cache
       final cachedSongs = await _localStorageService.getData(cacheKey);
       if (cachedSongs != null) {
@@ -577,7 +585,7 @@ class MusicService {
       if (downloadedSongs.isNotEmpty) {
         return downloadedSongs;
       }
-      
+
       // If nothing is available, rethrow the error
       rethrow;
     }
@@ -670,14 +678,15 @@ class MusicService {
       throw Exception('User not authenticated');
     }
 
-    await _supabase.from('playlist')  // Changed from 'playlists'
+    await _supabase
+        .from('playlist') // Changed from 'playlists'
         .insert({
-          'playlist_name': name,
-          'description': description,
-          'user_id': userId,
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        });
+      'playlist_name': name,
+      'description': description,
+      'user_id': userId,
+      'created_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
+    });
   }
 
   Future<void> addToPlaylist(String playlistId, String songId) async {
@@ -692,7 +701,7 @@ class MusicService {
       await _playlist.add(
         AudioSource.uri(
           Uri.parse(song['audio_url']),
-          tag: song,  // Pass the entire song object as the tag
+          tag: song, // Pass the entire song object as the tag
         ),
       );
       _updateQueueStream();
@@ -778,7 +787,7 @@ class MusicService {
           .eq('user_id', userId)
           .eq('song_id', songId)
           .maybeSingle();
-      
+
       return response != null;
     } catch (e) {
       print('Error checking if song is liked: $e');
@@ -831,7 +840,7 @@ class MusicService {
 
       print('Song data from DB: $songData');
       final audioUrl = songData['audio_url'];
-      
+
       if (audioUrl != null && audioUrl.isNotEmpty) {
         print('Found audio_url in DB: $audioUrl');
         return audioUrl;
@@ -843,20 +852,22 @@ class MusicService {
     }
   }
 
-  Future<List<int>?> _downloadFromUrl(String url, {Function(double)? onProgress}) async {
+  Future<List<int>?> _downloadFromUrl(String url,
+      {Function(double)? onProgress}) async {
     try {
       print('Attempting to download from URL: $url');
-      final response = await http.Client().send(http.Request('GET', Uri.parse(url)));
+      final response =
+          await http.Client().send(http.Request('GET', Uri.parse(url)));
       final totalBytes = response.contentLength ?? 0;
       List<int> bytes = [];
-      
+
       await for (var chunk in response.stream) {
         bytes.addAll(chunk);
         if (totalBytes > 0 && onProgress != null) {
           onProgress(bytes.length / totalBytes);
         }
       }
-      
+
       return bytes;
     } catch (e) {
       print('Error downloading from URL: $e');
@@ -867,8 +878,9 @@ class MusicService {
   Future<void> downloadSong(Map<String, dynamic> song) async {
     final songId = song['id'];
     final albumId = song['album_id'];
-    final originalImageUrl = song['image_url'];  // Store original image URL
-    final albumImageUrl = song['album_image_url'];  // Store album image URL separately
+    final originalImageUrl = song['image_url']; // Store original image URL
+    final albumImageUrl =
+        song['album_image_url']; // Store album image URL separately
 
     // Set download state before checking if already downloading
     _isDownloading[songId] = true;
@@ -884,7 +896,7 @@ class MusicService {
 
     try {
       print('Starting download for song ID: $songId');
-      
+
       if (await isSongDownloaded(songId)) {
         print('Song already downloaded: $songId');
         return;
@@ -900,27 +912,28 @@ class MusicService {
         _downloadProgress[songId] = progress;
         _downloadProgressController.add(Map.from(_downloadProgress));
       });
-      
+
       if (bytes == null || bytes.isEmpty) {
         throw Exception('Failed to download audio file');
       }
 
       // Save audio file with a randomized name
-      final secureFileName = '${DateTime.now().millisecondsSinceEpoch}_${Uri.encodeFull(songId)}.dat';
+      final secureFileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${Uri.encodeFull(songId)}.dat';
       final filePath = await _getSecureFilePath(secureFileName);
-      
+
       // Basic XOR encryption
       final encryptedBytes = _xorEncrypt(bytes, songId);
       await File(filePath).writeAsBytes(encryptedBytes);
 
       // Create metadata preserving all original song data
       final metadata = {
-        ...song,  // Keep all original song data
+        ...song, // Keep all original song data
         'downloaded_at': DateTime.now().toIso8601String(),
         'secure_file': secureFileName,
-        'original_image_url': originalImageUrl,  // Store original image URL
+        'original_image_url': originalImageUrl, // Store original image URL
       };
-      
+
       // Cache the song's image if available
       if (originalImageUrl != null && originalImageUrl.isNotEmpty) {
         final cachedImagePath = await _cacheImage(originalImageUrl, songId);
@@ -935,8 +948,10 @@ class MusicService {
           'id': albumId,
           'title': song['album_title'],
           'artist': song['artist'],
-          'image_url': albumImageUrl ?? song['image_url'],  // Use album image if available
-          'original_image_url': albumImageUrl ?? song['image_url'],  // Store original album image
+          'image_url': albumImageUrl ??
+              song['image_url'], // Use album image if available
+          'original_image_url':
+              albumImageUrl ?? song['image_url'], // Store original album image
         };
 
         await _localStorageService.saveAlbumMetadata(albumId, albumMetadata);
@@ -944,7 +959,8 @@ class MusicService {
 
         // Cache album image
         if (albumImageUrl != null) {
-          final albumImagePath = await _cacheImage(albumImageUrl, 'album_$albumId');
+          final albumImagePath =
+              await _cacheImage(albumImageUrl, 'album_$albumId');
           albumMetadata['cached_image_path'] = albumImagePath;
           await _localStorageService.saveAlbumMetadata(albumId, albumMetadata);
         }
@@ -958,24 +974,23 @@ class MusicService {
       _downloadProgress.remove(songId);
       _downloadProgressController.add(Map.from(_downloadProgress));
       await _saveDownloadState();
-      
+
       // Wait a bit before clearing the state completely
       await Future.delayed(Duration(seconds: 1));
       _isDownloading.remove(songId);
       await _saveDownloadState();
-
     } catch (e) {
       // Clear progress on error
       _isDownloading[songId] = false;
       _downloadProgress.remove(songId);
       _downloadProgressController.add(Map.from(_downloadProgress));
       await _saveDownloadState();
-      
+
       // Wait a bit before clearing the state completely
       await Future.delayed(Duration(seconds: 1));
       _isDownloading.remove(songId);
       await _saveDownloadState();
-      
+
       print('Error downloading song: $e');
       throw Exception('Failed to download song: $e');
     }
@@ -1013,7 +1028,7 @@ class MusicService {
   Future<List<int>?> _downloadFromStorage(String songId) async {
     try {
       print('Starting download process for song ID: $songId');
-      
+
       // First verify the file exists
       final fileExists = await _supabase.storage
           .from('songs')
@@ -1026,11 +1041,10 @@ class MusicService {
       }
 
       print('File found in storage, attempting download');
-      
+
       // Try to download the file
-      final bytes = await _supabase.storage
-          .from('songs')
-          .download('$songId.mp3');
+      final bytes =
+          await _supabase.storage.from('songs').download('$songId.mp3');
 
       if (bytes.isEmpty) {
         print('Downloaded file is empty');
@@ -1043,7 +1057,7 @@ class MusicService {
       print('Storage download error:');
       print('Error: $e');
       print('Stack trace: $stackTrace');
-      
+
       // Additional error info
       if (e is StorageException) {
         print('Storage error details: ${e.message}');
@@ -1105,7 +1119,7 @@ class MusicService {
       final currentIndex = _audioPlayer.currentIndex;
 
       // Adjust indices to account for the currently playing song
-      oldIndex += 1; 
+      oldIndex += 1;
       newIndex += 1;
 
       final playlist = _playlist.sequence.toList();
@@ -1114,12 +1128,12 @@ class MusicService {
 
       // Create new playlist without disrupting current playback
       final newPlaylist = ConcatenatingAudioSource(children: []);
-      await newPlaylist.addAll(playlist.map((source) => 
-        AudioSource.uri(
-          Uri.parse(source.tag['audio_url']),
-          tag: source.tag,
-        )).toList()
-      );
+      await newPlaylist.addAll(playlist
+          .map((source) => AudioSource.uri(
+                Uri.parse(source.tag['audio_url']),
+                tag: source.tag,
+              ))
+          .toList());
 
       // Update playlist while preserving current playback
       _playlist = newPlaylist;
@@ -1141,7 +1155,8 @@ class MusicService {
     }
   }
 
-  Stream<Map<String, double>> get downloadProgressStream => _downloadProgressController.stream;
+  Stream<Map<String, double>> get downloadProgressStream =>
+      _downloadProgressController.stream;
 
   Stream<Map<String, dynamic>> get currentSongStream =>
       _currentSongController.stream;
@@ -1161,13 +1176,10 @@ class MusicService {
 
       if (existingRecord != null) {
         // Update existing record with new timestamp
-        await _supabase
-            .from('listening_history')
-            .update({
-              'played_at': DateTime.now().toIso8601String(),
-              'play_count': (existingRecord['play_count'] ?? 0) + 1,
-            })
-            .eq('id', existingRecord['id']);
+        await _supabase.from('listening_history').update({
+          'played_at': DateTime.now().toIso8601String(),
+          'play_count': (existingRecord['play_count'] ?? 0) + 1,
+        }).eq('id', existingRecord['id']);
       } else {
         // Create new record
         await _supabase.from('listening_history').insert({
@@ -1182,17 +1194,21 @@ class MusicService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getDownloadedSongsForAlbum(String albumId) async {
+  Future<List<Map<String, dynamic>>> getDownloadedSongsForAlbum(
+      String albumId) async {
     try {
       final allDownloaded = await getDownloadedSongs();
-      return allDownloaded.where((song) => song['album_id'] == albumId).toList();
+      return allDownloaded
+          .where((song) => song['album_id'] == albumId)
+          .toList();
     } catch (e) {
       print('Error getting downloaded songs for album: $e');
       return [];
     }
   }
 
-  Future<void> _updateDownloadedSongsList(Map<String, dynamic> songMetadata) async {
+  Future<void> _updateDownloadedSongsList(
+      Map<String, dynamic> songMetadata) async {
     try {
       final downloadedSongs = await getDownloadedSongs();
       downloadedSongs.add(songMetadata);
@@ -1215,14 +1231,14 @@ class MusicService {
     try {
       final albumIds = await _localStorageService.getDownloadedAlbumIds();
       final albums = <Map<String, dynamic>>[];
-      
+
       for (final id in albumIds) {
         final albumData = await _localStorageService.getAlbumMetadata(id);
         if (albumData != null) {
           albums.add(albumData);
         }
       }
-      
+
       return albums;
     } catch (e) {
       print('Error getting downloaded albums: $e');
@@ -1232,7 +1248,8 @@ class MusicService {
 
   // Add this helper method
   Future<String> _getSecureFilePath(String fileName) async {
-    final directory = await getApplicationSupportDirectory(); // More secure than getApplicationDocumentsDirectory
+    final directory =
+        await getApplicationSupportDirectory(); // More secure than getApplicationDocumentsDirectory
     return '${directory.path}/$fileName';
   }
 
@@ -1242,17 +1259,17 @@ class MusicService {
       if (response.statusCode == 200) {
         final directory = await getApplicationSupportDirectory();
         final imagePath = '${directory.path}/images/${id}_image.jpg';
-        
+
         // Create images directory if it doesn't exist
         final imageDir = Directory('${directory.path}/images');
         if (!await imageDir.exists()) {
           await imageDir.create(recursive: true);
         }
-        
+
         // Save the image
         final imageFile = File(imagePath);
         await imageFile.writeAsBytes(response.bodyBytes);
-        
+
         return imagePath;
       }
       throw Exception('Failed to download image');
@@ -1268,7 +1285,7 @@ class MusicService {
       final directory = await getApplicationSupportDirectory();
       final imagePath = '${directory.path}/images/${id}_image.jpg';
       final imageFile = File(imagePath);
-      
+
       if (await imageFile.exists()) {
         return imagePath;
       }
@@ -1277,10 +1294,11 @@ class MusicService {
       final metadata = await _localStorageService.getData('metadata_$id');
       if (metadata != null && metadata['original_image_url'] != null) {
         // Try to cache the original image
-        final cachedPath = await _cacheImage(metadata['original_image_url'], id);
+        final cachedPath =
+            await _cacheImage(metadata['original_image_url'], id);
         return cachedPath;
       }
-      
+
       return null;
     } catch (e) {
       print('Error getting cached image path: $e');
@@ -1296,7 +1314,7 @@ class MusicService {
       }
 
       final response = await _supabase
-          .from('playlist')  // Changed from 'playlists'
+          .from('playlist') // Changed from 'playlists'
           .select('''
             *,
             playlist_songs(count)
@@ -1311,24 +1329,25 @@ class MusicService {
     }
   }
 
-  Future<void> addSongToPlaylist(String playlistId, Map<String, dynamic> song) async {
+  Future<void> addSongToPlaylist(
+      String playlistId, Map<String, dynamic> song) async {
     try {
       // First verify the playlist belongs to the current user
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
-      
+
       if (userId == null) {
         throw Exception('User not authenticated');
       }
 
       // Check playlist ownership
       final playlist = await supabase
-          .from('playlist')  // Changed from 'playlists'
+          .from('playlist') // Changed from 'playlists'
           .select('id, user_id')
           .eq('id', playlistId)
           .eq('user_id', userId)
           .single();
-      
+
       if (playlist == null) {
         throw Exception('Playlist not found or access denied');
       }
@@ -1452,9 +1471,8 @@ class MusicService {
       }
 
       final isFullyDownloaded = downloadedCount == allSongs.length;
-      final averageProgress = allSongs.isEmpty ? 
-          0.0 : 
-          totalProgress / allSongs.length;
+      final averageProgress =
+          allSongs.isEmpty ? 0.0 : totalProgress / allSongs.length;
 
       return {
         'isDownloading': anyDownloading,
@@ -1516,26 +1534,26 @@ class MusicService {
 
   Future<void> shuffleQueue() async {
     if (_currentQueue.isEmpty) return;
-    
+
     // Save current song
     final currentSong = _currentQueue.first;
-    
+
     // Shuffle remaining songs
     final remainingSongs = _currentQueue.skip(1).toList()..shuffle();
-    
+
     // Update queue with current song at start and shuffled remaining songs
     _currentQueue = [currentSong, ...remainingSongs];
-    
+
     // Create new shuffled playlist while preserving current playback
     final wasPlaying = _audioPlayer.playing;
     final position = await _audioPlayer.position;
-    
+
     final newPlaylist = ConcatenatingAudioSource(children: []);
     await newPlaylist.add(AudioSource.uri(
       Uri.parse(currentSong['audio_url']),
       tag: currentSong,
     ));
-    
+
     // Add shuffled songs to playlist
     for (var song in remainingSongs) {
       await newPlaylist.add(AudioSource.uri(
@@ -1543,41 +1561,42 @@ class MusicService {
         tag: song,
       ));
     }
-    
+
     // Set the new shuffled playlist
     _playlist = newPlaylist;
     await _audioPlayer.setAudioSource(
       _playlist,
       initialPosition: position,
     );
-    
+
     // Restore playback state
     if (wasPlaying) {
       await _audioPlayer.play();
     }
-    
+
     // Update UI
     _updateQueueStream();
   }
 
   Future<void> restoreOriginalQueue() async {
     if (_originalQueue.isEmpty) return;
-    
+
     // Find current song index in original queue
     final currentSong = _currentQueue.first;
-    final currentIndex = _originalQueue.indexWhere((song) => song['id'] == currentSong['id']);
-    
+    final currentIndex =
+        _originalQueue.indexWhere((song) => song['id'] == currentSong['id']);
+
     if (currentIndex >= 0) {
       // Reorder queue to start from current song while maintaining original order
       _currentQueue = [
         ..._originalQueue.skip(currentIndex),
         ..._originalQueue.take(currentIndex)
       ];
-      
+
       // Preserve playback state
       final wasPlaying = _audioPlayer.playing;
       final position = await _audioPlayer.position;
-      
+
       // Create new playlist in original order
       final newPlaylist = ConcatenatingAudioSource(children: []);
       for (var song in _currentQueue) {
@@ -1586,19 +1605,19 @@ class MusicService {
           tag: song,
         ));
       }
-      
+
       // Set the restored playlist
       _playlist = newPlaylist;
       await _audioPlayer.setAudioSource(
         _playlist,
         initialPosition: position,
       );
-      
+
       // Restore playback state
       if (wasPlaying) {
         await _audioPlayer.play();
       }
-      
+
       // Update UI
       _updateQueueStream();
     }

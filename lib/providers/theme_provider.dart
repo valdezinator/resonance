@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class ThemeProvider with ChangeNotifier {
+class ThemeProvider extends ChangeNotifier {
   static const String DARK_MODE_KEY = 'dark_mode';
   bool _isDarkMode = true;
+  Color _backgroundColor = const Color(0xFF0C0F14);
 
   bool get isDarkMode => _isDarkMode;
+  Color get backgroundColor => _backgroundColor;
 
   ThemeProvider() {
     _loadThemePreference();
@@ -14,11 +16,13 @@ class ThemeProvider with ChangeNotifier {
   Future<void> _loadThemePreference() async {
     final prefs = await SharedPreferences.getInstance();
     _isDarkMode = prefs.getBool(DARK_MODE_KEY) ?? true;
+    _backgroundColor = _isDarkMode ? const Color(0xFF0C0F14) : Colors.white;
     notifyListeners();
   }
 
   Future<void> toggleTheme() async {
     _isDarkMode = !_isDarkMode;
+    _backgroundColor = _isDarkMode ? const Color(0xFF0C0F14) : Colors.white;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(DARK_MODE_KEY, _isDarkMode);
     notifyListeners();
@@ -36,21 +40,17 @@ class ThemeProvider with ChangeNotifier {
   static const darkTextColor = Colors.white;
   static const darkSecondaryTextColor = Colors.white70;
 
-  Color get backgroundColor => _isDarkMode ? darkBackgroundColor : lightBackgroundColor;
   Color get surfaceColor => _isDarkMode ? darkSurfaceColor : lightSurfaceColor;
   Color get textColor => _isDarkMode ? darkTextColor : lightTextColor;
-  Color get secondaryTextColor => _isDarkMode ? darkSecondaryTextColor : lightSecondaryTextColor;
+  Color get secondaryTextColor =>
+      _isDarkMode ? darkSecondaryTextColor : lightSecondaryTextColor;
 
   // Helper methods for getting text colors
   Color getTextColor(Color lightColor, Color darkColor) {
     return _isDarkMode ? darkColor : lightColor;
   }
 
-  Color getPrimaryTextColor() {
-    return _isDarkMode ? darkTextColor : Colors.black;
-  }
-
-  Color getSecondaryTextColor() {
-    return _isDarkMode ? darkSecondaryTextColor : Colors.black54;
-  }
+  Color getPrimaryTextColor() => _isDarkMode ? Colors.white : Colors.black;
+  Color getSecondaryTextColor() =>
+      _isDarkMode ? Colors.white70 : Colors.black54;
 }

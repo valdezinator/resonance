@@ -4,10 +4,11 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../widgets/bottom_player.dart';
 import '../widgets/floating_player_mixin.dart';
 import 'dart:ui';
-import 'package:provider/provider.dart';
+import 'package:provider/provider.dart' as provider;
 import '../providers/theme_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SearchPage extends StatefulWidget {
+class SearchPage extends ConsumerStatefulWidget {
   final Map<String, dynamic>? currentSong;
   final Function(Map<String, dynamic>?) onSongPlay;
   final MusicService musicService;
@@ -24,10 +25,11 @@ class SearchPage extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _SearchPageState createState() => _SearchPageState();
+  ConsumerState<SearchPage> createState() => _SearchPageState();
 }
 
-class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
+class _SearchPageState extends ConsumerState<SearchPage>
+    with FloatingPlayerMixin {
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
   bool _isLoading = false;
@@ -71,12 +73,14 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
   final List<Map<String, dynamic>> _topGenres = [
     {
       'title': 'Pop',
-      'image_url': 'https://i.scdn.co/image/ab67706f00000003e8e28219724c2423afa4d320',
+      'image_url':
+          'https://i.scdn.co/image/ab67706f00000003e8e28219724c2423afa4d320',
       'description': 'Popular hits you\'ll love',
     },
     {
       'title': 'Hip-Hop',
-      'image_url': 'https://i.scdn.co/image/ab67706f00000003e8e28219724c2423afa4d320',
+      'image_url':
+          'https://i.scdn.co/image/ab67706f00000003e8e28219724c2423afa4d320',
       'description': 'Latest hip-hop tracks',
     },
   ];
@@ -115,7 +119,7 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
   }
 
   Widget _buildSearchBar() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+    final themeProvider = provider.Provider.of<ThemeProvider>(context);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -131,7 +135,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
           prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
           suffixIcon: Icon(Icons.mic, color: Colors.grey[400]),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
         onChanged: _performSearch,
       ),
@@ -256,7 +261,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                           height: 160,
                           width: 160,
                           color: Colors.grey[800],
-                          child: const Icon(Icons.music_note, color: Colors.white),
+                          child:
+                              const Icon(Icons.music_note, color: Colors.white),
                         ),
                       ),
                     ),
@@ -335,7 +341,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                   width: 48,
                   height: 48,
                   color: Colors.grey[800],
-                  child: const Icon(Icons.music_note, color: Colors.white, size: 24),
+                  child: const Icon(Icons.music_note,
+                      color: Colors.white, size: 24),
                 ),
               ),
             ),
@@ -392,7 +399,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
               await widget.musicService.playSong(
                 audioUrl,
                 currentSong: standardizedSong,
-                subsequentSongs: subsequentSongs,  // Use subsequentSongs instead of nextSong
+                subsequentSongs:
+                    subsequentSongs, // Use subsequentSongs instead of nextSong
               );
             } catch (e) {
               if (mounted) {
@@ -412,8 +420,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    
+    final themeProvider = provider.Provider.of<ThemeProvider>(context);
+
     return Scaffold(
       backgroundColor: themeProvider.backgroundColor,
       body: Container(
@@ -427,7 +435,8 @@ class _SearchPageState extends State<SearchPage> with FloatingPlayerMixin {
                     child: _searchController.text.isEmpty
                         ? SingleChildScrollView(
                             padding: EdgeInsets.only(
-                              bottom: MediaQuery.of(context).padding.bottom + 80,
+                              bottom:
+                                  MediaQuery.of(context).padding.bottom + 80,
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

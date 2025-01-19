@@ -8,10 +8,13 @@ import 'dart:ui';
 import 'dart:io';
 import 'package:google_fonts/google_fonts.dart';
 import 'library_page.dart';
-import 'package:provider/provider.dart';
+import 'package:provider/provider.dart' as provider;
 import '../providers/theme_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/theme_providers.dart';
+import '../providers/music_providers.dart';
 
-class AlbumDetailsPage extends StatefulWidget {
+class AlbumDetailsPage extends ConsumerStatefulWidget {
   final Map<String, dynamic> album;
   final MusicService musicService;
   final Function(Map<String, dynamic>) onSongPlay;
@@ -30,10 +33,11 @@ class AlbumDetailsPage extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<AlbumDetailsPage> createState() => _AlbumDetailsPageState();
+  ConsumerState<AlbumDetailsPage> createState() => _AlbumDetailsPageState();
 }
 
-class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayerMixin {
+class _AlbumDetailsPageState extends ConsumerState<AlbumDetailsPage>
+    with FloatingPlayerMixin {
   Map<String, dynamic>? _localCurrentSong;
   bool _isSearching = false;
   String _searchQuery = '';
@@ -62,8 +66,8 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
     } catch (e) {
       print('Error loading songs: $e');
       // Try to load downloaded songs for this album
-      final downloadedSongs = 
-          await widget.musicService.getDownloadedSongsForAlbum(widget.album['id']);
+      final downloadedSongs = await widget.musicService
+          .getDownloadedSongsForAlbum(widget.album['id']);
       setState(() {
         _allSongs = downloadedSongs;
         _filteredSongs = downloadedSongs;
@@ -134,8 +138,14 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
       } else {
         _filteredSongs = _allSongs
             .where((song) =>
-                song['title'].toString().toLowerCase().contains(query.toLowerCase()) ||
-                song['artist'].toString().toLowerCase().contains(query.toLowerCase()))
+                song['title']
+                    .toString()
+                    .toLowerCase()
+                    .contains(query.toLowerCase()) ||
+                song['artist']
+                    .toString()
+                    .toLowerCase()
+                    .contains(query.toLowerCase()))
             .toList();
       }
     });
@@ -172,30 +182,31 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    
+    final theme = ref.watch(themeProvider);
+
     return Scaffold(
-      backgroundColor: themeProvider.backgroundColor,
+      backgroundColor: theme.backgroundColor,
       body: Stack(
         children: [
           Container(
-            // decoration: BoxDecoration(
-            //   gradient: RadialGradient(
-            //     center: Alignment(0, -0.5),
-            //     radius: 1.5,
-            //     colors: [
-            //       dominantColor.withOpacity(0.3),
-            //       dominantColor.withOpacity(0.1),
-            //       const Color(0xFF0C0F14),
-            //     ],
-            //     stops: const [0.0, 0.4, 1.0],
-            //   ),
-            // ),
-          ),
+              // decoration: BoxDecoration(
+              //   gradient: RadialGradient(
+              //     center: Alignment(0, -0.5),
+              //     radius: 1.5,
+              //     colors: [
+              //       dominantColor.withOpacity(0.3),
+              //       dominantColor.withOpacity(0.1),
+              //       const Color(0xFF0C0F14),
+              //     ],
+              //     stops: const [0.0, 0.4, 1.0],
+              //   ),
+              // ),
+              ),
           FutureBuilder<List<Map<String, dynamic>>>(
             future: _songsFuture,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && _allSongs.isEmpty) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  _allSongs.isEmpty) {
                 return Center(child: CircularProgressIndicator());
               }
 
@@ -213,15 +224,17 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                         onPressed: () async {
                           // Try to load downloaded songs for this album
                           try {
-                            final downloadedSongs = 
-                                await widget.musicService.getDownloadedSongsForAlbum(widget.album['id']);
+                            final downloadedSongs = await widget.musicService
+                                .getDownloadedSongsForAlbum(widget.album['id']);
                             setState(() {
                               _allSongs = downloadedSongs;
                               _filteredSongs = downloadedSongs;
                             });
                           } catch (e) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('No downloaded songs available')),
+                              SnackBar(
+                                  content:
+                                      Text('No downloaded songs available')),
                             );
                           }
                         },
@@ -369,7 +382,8 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                                       'image_url': widget.album['image_url'],
                                     });
 
-                                    await widget.musicService.playAllSongs(songs);
+                                    await widget.musicService
+                                        .playAllSongs(songs);
                                   }
                                 } catch (e) {
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -409,17 +423,23 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                             child: Material(
                               color: Colors.transparent,
                               child: FutureBuilder<Map<String, dynamic>>(
-                                future: widget.musicService.getAlbumDownloadState(widget.album['id']),
+                                future: widget.musicService
+                                    .getAlbumDownloadState(widget.album['id']),
                                 builder: (context, snapshot) {
-                                  final downloadState = snapshot.data ?? {
-                                    'isDownloading': false,
-                                    'isFullyDownloaded': false,
-                                    'progress': 0.0,
-                                  };
+                                  final downloadState = snapshot.data ??
+                                      {
+                                        'isDownloading': false,
+                                        'isFullyDownloaded': false,
+                                        'progress': 0.0,
+                                      };
 
-                                  final isDownloading = downloadState['isDownloading'] ?? false;
-                                  final isFullyDownloaded = downloadState['isFullyDownloaded'] ?? false;
-                                  final progress = downloadState['progress'] ?? 0.0;
+                                  final isDownloading =
+                                      downloadState['isDownloading'] ?? false;
+                                  final isFullyDownloaded =
+                                      downloadState['isFullyDownloaded'] ??
+                                          false;
+                                  final progress =
+                                      downloadState['progress'] ?? 0.0;
 
                                   if (isFullyDownloaded) {
                                     return Center(
@@ -438,7 +458,9 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                                         CircularProgressIndicator(
                                           value: progress,
                                           backgroundColor: Colors.grey[800],
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                  Colors.white),
                                           strokeWidth: 2,
                                         ),
                                         Text(
@@ -481,19 +503,22 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
                           Expanded(
                             child: Text(
                               'Title',
-                              style: TextStyle(color: themeProvider.getPrimaryTextColor()),
+                              style:
+                                  TextStyle(color: theme.getPrimaryTextColor()),
                             ),
                           ),
                           Text(
                             'Duration',
-                            style: TextStyle(color: themeProvider.getPrimaryTextColor()),
+                            style:
+                                TextStyle(color: theme.getPrimaryTextColor()),
                           ),
                         ],
                       ),
                     ),
                   ),
                   _SongListView(
-                    songs: _filteredSongs, // Use filtered songs instead of all songs
+                    songs:
+                        _filteredSongs, // Use filtered songs instead of all songs
                     album: widget.album,
                     musicService: widget.musicService,
                     onSongPlay: widget.onSongPlay,
@@ -512,10 +537,10 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
             currentSong: _localCurrentSong,
             musicService: widget.musicService,
             onSongPlay: (song) {
+              setState(() {
+                _localCurrentSong = song;
+              });
               if (song != null) {
-                setState(() {
-                  _localCurrentSong = song;
-                });
                 widget.onSongPlay(song);
               }
             },
@@ -604,25 +629,26 @@ class _AlbumDetailsPageState extends State<AlbumDetailsPage> with FloatingPlayer
 class DownloadButton extends StatefulWidget {
   final bool isDownloaded;
   final Function() onPressed;
-  final String songId;  // Add this
-  final MusicService musicService;  // Add this
+  final String songId; // Add this
+  final MusicService musicService; // Add this
 
   const DownloadButton({
     Key? key,
     required this.isDownloaded,
     required this.onPressed,
-    required this.songId,  // Add this
-    required this.musicService,  // Add this
+    required this.songId, // Add this
+    required this.musicService, // Add this
   }) : super(key: key);
 
   @override
   State<DownloadButton> createState() => _DownloadButtonState();
 }
 
-class _DownloadButtonState extends State<DownloadButton> with SingleTickerProviderStateMixin {
+class _DownloadButtonState extends State<DownloadButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _downloadedScale;
-  
+
   @override
   void initState() {
     super.initState();
@@ -660,7 +686,8 @@ class _DownloadButtonState extends State<DownloadButton> with SingleTickerProvid
           future: widget.musicService.isSongDownloaded(widget.songId),
           builder: (context, downloadedSnapshot) {
             final isDownloaded = downloadedSnapshot.data ?? widget.isDownloaded;
-            final isDownloading = widget.musicService.isDownloading(widget.songId);
+            final isDownloading =
+                widget.musicService.isDownloading(widget.songId);
             final downloadProgress = snapshot.data?[widget.songId] ?? 0.0;
 
             // Show completed download icon
@@ -721,7 +748,7 @@ class _DownloadButtonState extends State<DownloadButton> with SingleTickerProvid
   }
 }
 
-class _SongListView extends StatelessWidget {
+class _SongListView extends ConsumerWidget {
   final List<Map<String, dynamic>> songs;
   final Map<String, dynamic> album;
   final MusicService musicService;
@@ -737,122 +764,39 @@ class _SongListView extends StatelessWidget {
     required this.onLocalSongUpdate,
   }) : super(key: key);
 
-  Widget _buildSongImage(Map<String, dynamic> song) {
-    return FutureBuilder<String?>(
-      future: musicService.getCachedImagePath(song['id']),
-      builder: (context, snapshot) {
-        if (snapshot.hasData && snapshot.data != null) {
-          // Use cached image
-          return Container(
-            width: 50,  // Increased from 40
-            height: 50,  // Increased from 40
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              image: DecorationImage(
-                image: FileImage(File(snapshot.data!)),
-                fit: BoxFit.cover,
-              ),
-            ),
-          );
-        } else {
-          // Use network image or album image
-          return Container(
-            width: 50,  // Increased from 40
-            height: 50,  // Increased from 40
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              image: DecorationImage(
-                image: NetworkImage(song['image_url'] ?? album['image_url']),
-                fit: BoxFit.cover,
-              ),
-            ),
-          );
-        }
-      },
-    );
-  }
-
-  void _showMoreOptions(BuildContext context, Map<String, dynamic> song) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(Icons.playlist_add, color: Colors.white),
-              title: Text(
-                'Add to Playlist',
-                style: GoogleFonts.lato(color: Colors.white),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _showPlaylistSelector(context, song);
-              },
-            ),
-            // Add more options here
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showPlaylistSelector(BuildContext context, Map<String, dynamic> song) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => PlaylistSelectorSheet(
-        song: song,
-        musicService: musicService,
-      ),
-    );
-  }
-
-  Widget _buildDownloadButton(BuildContext context, Map<String, dynamic> song) {
-    return FutureBuilder<bool>(
-      key: ValueKey('download_${song['id']}'), // Remove timestamp to prevent rebuilds
-      future: musicService.isSongDownloaded(song['id']),
-      builder: (context, snapshot) {
-        final isDownloaded = snapshot.data ?? false;
-        
-        return DownloadButton(
-          isDownloaded: isDownloaded,
-          onPressed: () async {
-            final songToDownload = {
-              ...song,
-              'album_title': album['title'],
-            };
-            await musicService.downloadSong(songToDownload);
-          },
-          songId: song['id'],  // Add this
-          musicService: musicService,  // Add this
-        );
-      },
-    );
-  }
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Listen to the current song to update UI when it changes
+    ref.listen<Map<String, dynamic>?>(currentSongProvider, (previous, next) {
+      if (next != null) {
+        onLocalSongUpdate(next);
+      }
+    });
+
     return SliverList(
       delegate: SliverChildBuilderDelegate(
         (context, index) {
           final song = songs[index];
+          final currentSong =
+              ref.watch<Map<String, dynamic>?>(currentSongProvider);
+          final isCurrentSong =
+              currentSong != null && currentSong['id'] == song['id'];
+
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.5),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.5),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
+                color: isCurrentSong
+                    ? Colors.white.withOpacity(0.2)
+                    : Colors.white.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(5),
               ),
               child: ListTile(
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: _buildSongImage(song), // Directly use _buildSongImage here
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading:
+                    _buildSongImage(song), // Directly use _buildSongImage here
                 title: Padding(
                   padding: EdgeInsets.only(left: 8),
                   child: Column(
@@ -870,7 +814,8 @@ class _SongListView extends StatelessWidget {
                       ),
                       Text(
                         song['artist'],
-                        style: GoogleFonts.lato(  // Changed this line
+                        style: GoogleFonts.lato(
+                          // Changed this line
                           color: Colors.grey[400],
                           fontSize: 14,
                         ),
@@ -956,6 +901,83 @@ class _SongListView extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildSongImage(Map<String, dynamic> song) {
+    return FutureBuilder<String?>(
+      future: musicService.getCachedImagePath(song['id']),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data != null) {
+          // Use cached image
+          return Container(
+            width: 50, // Increased from 40
+            height: 50, // Increased from 40
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              image: DecorationImage(
+                image: FileImage(File(snapshot.data!)),
+                fit: BoxFit.cover,
+              ),
+            ),
+          );
+        } else {
+          // Use network image or album image
+          return Container(
+            width: 50, // Increased from 40
+            height: 50, // Increased from 40
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              image: DecorationImage(
+                image: NetworkImage(song['image_url'] ?? album['image_url']),
+                fit: BoxFit.cover,
+              ),
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  void _showMoreOptions(BuildContext context, Map<String, dynamic> song) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.playlist_add, color: Colors.white),
+              title: Text(
+                'Add to Playlist',
+                style: GoogleFonts.lato(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showPlaylistSelector(context, song);
+              },
+            ),
+            // Add more options here
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPlaylistSelector(BuildContext context, Map<String, dynamic> song) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => PlaylistSelectorSheet(
+        song: song,
+        musicService: musicService,
+      ),
+    );
+  }
 }
 
 class PlaylistSelectorSheet extends StatefulWidget {
@@ -1004,8 +1026,8 @@ class _PlaylistSelectorSheetState extends State<PlaylistSelectorSheet> {
           ),
           ListTile(
             leading: Container(
-              width: 50,  // Increased from 40
-              height: 50,  // Increased from 40
+              width: 50, // Increased from 40
+              height: 50, // Increased from 40
               decoration: BoxDecoration(
                 color: Colors.green,
                 borderRadius: BorderRadius.circular(8),
@@ -1058,8 +1080,8 @@ class _PlaylistSelectorSheetState extends State<PlaylistSelectorSheet> {
                   final playlist = snapshot.data![index];
                   return ListTile(
                     leading: Container(
-                      width: 50,  // Increased from 40
-                      height: 50,  // Increased from 40
+                      width: 50, // Increased from 40
+                      height: 50, // Increased from 40
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
                         image: playlist['image_url'] != null
@@ -1086,7 +1108,8 @@ class _PlaylistSelectorSheetState extends State<PlaylistSelectorSheet> {
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Added to ${playlist['playlist_name']}'),
+                            content:
+                                Text('Added to ${playlist['playlist_name']}'),
                           ),
                         );
                       } catch (e) {
